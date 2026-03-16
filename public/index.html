@@ -1,75 +1,121 @@
 <!DOCTYPE html>
+<!-- DOCTYPE tells the browser this is a modern HTML5 document.
+     Without it, some browsers enter "quirks mode" and render things
+     inconsistently. Always include this as the very first line. -->
+
 <html>
     <head>
+        <!-- The <head> contains metadata and resources that are loaded
+             before the page is displayed. None of it is visible content. -->
+
+        <!-- Sets the text shown on the browser tab. -->
         <title>OpenRealm</title>
 
         <style>
-            body{
-                margin: 0;
-                background: #1e1e1e;
-                color: white;
+            /* ============================================================
+               CSS Styles
+               CSS controls how every element looks. Selectors (like "body"
+               or "#chatContainer") target elements, and the properties
+               inside the curly braces define how they appear.
+               ============================================================ */
+
+            /* --- Page Body --- */
+            body {
+                margin: 0;                   /* Remove the default white gap around the page edge */
+                background: #1e1e1e;         /* Dark grey page background */
+                color: white;                /* Default text color for anything on the page */
                 font-family: Arial, sans-serif;
-                text-align: center;
+                text-align: center;          /* Center the h1 heading */
             }
 
-            #gameContainer{
+            /* --- Game Container --- */
+            /* This div wraps the canvas and chat panel side by side.
+               'display: flex' switches it into Flexbox layout, which makes
+               placing children horizontally or vertically much easier than
+               older techniques like floats. */
+            #gameContainer {
                 display: flex;
-                justify-content: center;
-                align-items: flex-start;
-                gap: 20px;
-                margin-top: 20px;
+                justify-content: center;     /* Center the children horizontally on the page */
+                align-items: flex-start;     /* Align children to the top (not stretched to equal height) */
+                gap: 20px;                   /* Add 20px of space between the canvas and chat panel */
+                margin-top: 20px;            /* Push everything down from the heading */
             }
 
-            canvas{
-                background: #2b2b2b;
+            /* --- Canvas --- */
+            /* The <canvas> element itself has no built-in style.
+               Its width and height are set as HTML attributes (800x600),
+               which defines the actual drawing resolution.
+               CSS here just adds the visual border and background color. */
+            canvas {
+                background: #2b2b2b;         /* Dark fill so the canvas area is visible when empty */
                 border: 2px solid white;
             }
 
-            #chatContainer{
+            /* --- Chat Panel --- */
+            /* The chat panel is a fixed-size column that sits alongside
+               the canvas. It also uses Flexbox internally to stack the
+               message list and input bar vertically. */
+            #chatContainer {
                 width: 300px;
-                height: 600px;
+                height: 600px;               /* Match the canvas height so they line up */
                 display: flex;
-                flex-direction: column;
+                flex-direction: column;      /* Stack children top-to-bottom */
                 border: 2px solid white;
                 background: #252525;
             }
 
-            #chatMessages{
+            /* --- Message List --- */
+            /* Takes up all remaining vertical space inside #chatContainer
+               after the input bar has taken what it needs.
+               'flex: 1' is shorthand for "grow to fill available space". */
+            #chatMessages {
                 flex: 1;
-                overflow-y: auto;
+                overflow-y: auto;            /* Show a scrollbar when messages overflow vertically */
                 padding: 10px;
-                text-align: left;
+                text-align: left;            /* Override the body's center alignment for message text */
             }
 
-            #chatInputContainer{
-                display: flex;
-                border-top: 1px solid #444;
+            /* --- Input Bar --- */
+            /* A thin row at the bottom of the chat panel that holds the
+               text input and send button side by side. */
+            #chatInputContainer {
+                display: flex;               /* Place input and button next to each other */
+                border-top: 1px solid #444;  /* Subtle dividing line between messages and input */
             }
 
-            #chatInput{
+            /* --- Text Input --- */
+            /* 'flex: 1' makes the input field stretch to fill all the
+               horizontal space that the Send button doesn't use. */
+            #chatInput {
                 flex: 1;
                 padding: 10px;
                 border: none;
-                outline: none;
+                outline: none;               /* Remove the blue focus ring browsers add by default */
                 background: #1a1a1a;
                 color: white;
             }
 
-            #sendButton{
+            /* --- Send Button --- */
+            #sendButton {
                 padding: 10px 15px;
                 border: none;
-                background: #4caf50;
+                background: #4caf50;         /* Material Design green */
                 color: white;
-                cursor: pointer;
+                cursor: pointer;             /* Show a hand cursor on hover to indicate it's clickable */
             }
 
-            #sendButton:hover{
-                background: #45a049;
+            /* --- Send Button Hover State --- */
+            /* The :hover pseudo-class applies these styles only when the
+               mouse is over the button, giving visual feedback to the user. */
+            #sendButton:hover {
+                background: #45a049;         /* Slightly darker green on hover */
             }
 
-            .chatMessage{
+            /* --- Individual Chat Message --- */
+            /* Applied to each message div created by addChatMessage() in game.js. */
+            .chatMessage {
                 margin-bottom: 8px;
-                word-wrap: break-word;
+                word-wrap: break-word;       /* Wrap long words/URLs so they don't overflow the panel */
             }
 
         </style>
@@ -78,19 +124,60 @@
 
         <h1>Welcome to OpenRealm!</h1>
 
+        <!-- ============================================================
+             Page Layout
+             ============================================================ -->
+
+        <!-- Flex container that holds the game canvas and chat panel side by side. -->
         <div id="gameContainer">
+
+            <!-- The canvas is where the game is drawn by game.js.
+                 'width' and 'height' set the drawing resolution in pixels —
+                 these must match WORLD_WIDTH and WORLD_HEIGHT in server.js
+                 and the boundary checks in game.js. -->
             <canvas id="gameCanvas" width="800" height="600"></canvas>
 
+            <!-- Chat panel: a flex column containing the message list and input bar. -->
             <div id="chatContainer">
+
+                <!-- Scrollable area where chat messages are appended by game.js.
+                     Starts empty — messages are added dynamically via JavaScript. -->
                 <div id="chatMessages"></div>
+
+                <!-- Input row at the bottom of the chat panel. -->
                 <div id="chatInputContainer">
-                    <input type="text" id="chatInput" placeholder="Type a message..." maxlength="200"/>
+
+                    <!-- Text input for typing messages.
+                         'maxlength' enforces the 200 character limit in the browser,
+                         matching the server-side cap in server.js for consistency. -->
+                    <input
+                        type="text"
+                        id="chatInput"
+                        placeholder="Type a message..."
+                        maxlength="200"
+                    />
+
                     <button id="sendButton">Send</button>
                 </div>
             </div>
         </div>
 
+        <!-- ============================================================
+             Scripts
+             Scripts are placed at the BOTTOM of the body (not in <head>)
+             so the browser has already built all the HTML elements before
+             the JavaScript runs. If the scripts were in <head>, game.js
+             would try to find elements like #gameCanvas before they exist.
+             ============================================================ -->
+
+        <!-- Socket.IO client library, automatically served by the Socket.IO
+             server at this fixed path. It provides the global io() function
+             used in game.js to connect to the server. -->
         <script src="/socket.io/socket.io.js"></script>
+
+        <!-- Our game logic. Loaded second because it depends on the
+             Socket.IO library being available first. -->
         <script src="/game.js"></script>
+
     </body>
 </html>
