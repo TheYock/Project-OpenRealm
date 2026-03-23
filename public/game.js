@@ -13,11 +13,10 @@
 // receive events.
 const socket = io();
 
-// Prompt the player for their name before anything else happens.
-// prompt() is a built-in browser function that shows a dialog box.
-// The || "Player" fallback is used if they dismiss the dialog or
-// leave it blank.
-const playerName = prompt("Enter your name:", "Player") || "Player";
+// playerName is set by auth.js once the player logs in or registers.
+// It starts empty — the game will not join the server until joinGame()
+// is called with the authenticated username.
+let playerName = "";
 
 // --- Canvas Setup ---
 // Grab the <canvas> element from the HTML by its ID.
@@ -32,6 +31,18 @@ const ctx = canvas.getContext("2d");
 const chatMessages = document.getElementById("chatMessages");
 const chatInput = document.getElementById("chatInput");
 const sendButton = document.getElementById("sendButton");
+
+// Spectators see chat but can't type. The input is disabled with a
+// prompt until they log in. auth.js calls window.enableChat() after login.
+chatInput.disabled     = true;
+chatInput.placeholder  = "Log in to chat...";
+sendButton.disabled    = true;
+
+window.enableChat = function() {
+    chatInput.disabled    = false;
+    chatInput.placeholder = "Type a message...";
+    sendButton.disabled   = false;
+};
 
 // --- Shared Player State ---
 // A dictionary of all players currently in the game, keyed by socket ID.
@@ -90,17 +101,36 @@ document.addEventListener("keyup", (e) => {
 
 // --- Event: "connect" ---
 // Fires automatically when our connection to the server is established.
-// This is when we learn our socket ID and officially join the game.
+// We just store our socket ID here. The actual "join" is sent later
+// by joinGame() once the player has authenticated via the login screen.
 socket.on("connect", () => {
     myId = socket.id;
 
-    // Tell the server we've joined, along with our name and starting position.
-    socket.emit("join", {
-        name: playerName,
-        x: player.x,
-        y: player.y
-    });
+    // If auth.js already called joinGame() before the socket connected
+    // (a race condition that can happen with a fast auto-login), the
+    // name will already be set — emit join now to catch up.
+    if (playerName) {
+        socket.emit("join", { name: playerName, x: player.x, y: player.y });
+    }
 });
+
+// ============================================================
+// joinGame()
+// ============================================================
+// Called by auth.js after the player successfully logs in or
+// registers. Sets the player's name and tells the server we've
+// joined. Exposed on window so auth.js can call it even though
+// that file is loaded separately.
+// ============================================================
+window.joinGame = function(username) {
+    playerName = username;
+
+    // Only emit if the socket is already connected. If not,
+    // the "connect" handler above will catch it when it fires.
+    if (myId) {
+        socket.emit("join", { name: playerName, x: player.x, y: player.y });
+    }
+};
 
 // --- Event: "currentPlayers" ---
 // Sent by the server to the newly joined player only.
@@ -178,6 +208,9 @@ function addChatMessage(message) {
 
 // Reads the chat input, sends the message to the server, and clears the field.
 function sendChatMessage() {
+    // Spectators can watch chat but not send messages.
+    if (!playerName) return;
+
     const message = chatInput.value.trim();
 
     // Don't send empty messages.
@@ -208,6 +241,9 @@ chatInput.addEventListener("keydown", (e) => {
 
 // updatePlayer runs every frame and handles movement input.
 function updatePlayer() {
+    // Spectators haven't logged in yet — don't move anything.
+    if (!playerName) return;
+
     // Move the player based on which keys are currently held down.
     // Y increases downward on a canvas, so W subtracts from Y (move up)
     // and S adds to Y (move down).

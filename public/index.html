@@ -118,9 +118,324 @@
                 word-wrap: break-word;       /* Wrap long words/URLs so they don't overflow the panel */
             }
 
+            /* ============================================================
+               Auth Overlay
+               The overlay sits on top of everything while the player is
+               not yet logged in. 'position: fixed' locks it to the
+               viewport (not the page), so it covers the whole screen
+               even if the user has scrolled. 'inset: 0' is shorthand
+               for top/right/bottom/left all set to 0.
+               ============================================================ */
+            #authOverlay {
+                display: none;               /* Hidden by default — auth.js shows it if needed */
+                position: fixed;
+                inset: 0;                    /* Cover the entire viewport */
+                background: rgba(0, 0, 0, 0.88);
+                z-index: 1000;               /* Sit above all other content */
+                align-items: center;
+                justify-content: center;
+            }
+
+            /* ============================================================
+               Spectator Banner
+               Shown across the top of the page for unauthenticated users.
+               It stays visible until the player successfully logs in.
+               ============================================================ */
+            #spectatorBanner {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+                padding: 12px 24px;
+                background: linear-gradient(90deg, #1a3a1a, #2d5a2d, #1a3a1a);
+                border-bottom: 2px solid #4caf50;
+            }
+
+            #spectatorBanner span {
+                font-size: 1rem;
+                font-weight: bold;
+                letter-spacing: 0.5px;
+                color: #e8f5e9;
+            }
+
+            #spectatorBanner button {
+                padding: 8px 20px;
+                background: #4caf50;
+                border: none;
+                border-radius: 6px;
+                color: white;
+                font-size: 0.9rem;
+                font-weight: bold;
+                cursor: pointer;
+                transition: background 0.2s, transform 0.1s;
+                white-space: nowrap;
+            }
+
+            #spectatorBanner button:hover {
+                background: #45a049;
+                transform: scale(1.03);
+            }
+
+            /* ============================================================
+               Auth Card Close Button
+               Sits in the top-right corner of the auth card.
+               ============================================================ */
+            #authClose {
+                position: absolute;
+                top: 14px;
+                right: 16px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.3rem;
+                cursor: pointer;
+                line-height: 1;
+                transition: color 0.2s;
+            }
+
+            #authClose:hover {
+                color: white;
+            }
+
+            /* authCard needs position: relative so #authClose can anchor to it */
+            /* The white card in the centre of the overlay */
+            #authCard {
+                position: relative;
+                background: #1e1e1e;
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 40px 36px;
+                width: 340px;
+                box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+            }
+
+            /* Game title inside the card */
+            #authCard h2 {
+                margin: 0 0 8px;
+                font-size: 1.8rem;
+                color: #4caf50;             /* Green accent matching the game theme */
+                letter-spacing: 1px;
+            }
+
+            /* Subtitle under the title */
+            #authCard p.subtitle {
+                margin: 0 0 28px;
+                color: #888;
+                font-size: 0.85rem;
+            }
+
+            /* --- Tab Row --- */
+            /* Two buttons that switch between Login and Register.
+               They sit side by side using flex. */
+            #authTabs {
+                display: flex;
+                margin-bottom: 24px;
+                border-bottom: 1px solid #333;
+            }
+
+            /* Individual tab button */
+            .authTab {
+                flex: 1;                     /* Each tab takes half the width */
+                padding: 10px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 0.95rem;
+                cursor: pointer;
+                border-bottom: 2px solid transparent;
+                transition: color 0.2s, border-color 0.2s;
+            }
+
+            /* Active tab gets a green underline and brighter text */
+            .authTab.active {
+                color: #4caf50;
+                border-bottom-color: #4caf50;
+            }
+
+            /* --- Auth Forms --- */
+            /* Each form is a flex column so fields stack vertically. */
+            .authForm {
+                display: none;               /* Hidden by default; auth.js shows the active one */
+                flex-direction: column;
+                gap: 14px;                   /* Space between each field */
+            }
+
+            /* Labels sit above their inputs */
+            .authForm label {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                font-size: 0.85rem;
+                color: #aaa;
+            }
+
+            /* Text/password inputs */
+            .authForm input {
+                padding: 10px 12px;
+                background: #2b2b2b;
+                border: 1px solid #444;
+                border-radius: 6px;
+                color: white;
+                font-size: 0.95rem;
+                outline: none;
+                transition: border-color 0.2s;
+            }
+
+            /* Highlight the border when the field is focused */
+            .authForm input:focus {
+                border-color: #4caf50;
+            }
+
+            /* Submit button — full width, green */
+            .authForm button {
+                margin-top: 6px;
+                padding: 12px;
+                background: #4caf50;
+                border: none;
+                border-radius: 6px;
+                color: white;
+                font-size: 1rem;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+
+            .authForm button:hover:not(:disabled) {
+                background: #45a049;
+            }
+
+            .authForm button:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+
+            /* Error message displayed below the form on failure */
+            .authError {
+                font-size: 0.83rem;
+                color: #e57373;             /* Soft red — readable but not alarming */
+                min-height: 18px;           /* Reserve space so the card doesn't jump on error */
+                text-align: center;
+            }
+
+            /* ============================================================
+               Player Bar
+               Shown instead of the spectator banner once the player is
+               logged in. Sits at the top of the page with their name
+               and a logout button.
+               ============================================================ */
+            #playerBar {
+                display: none;              /* Hidden until auth.js shows it after login */
+                align-items: center;
+                justify-content: space-between;
+                padding: 10px 24px;
+                background: #1a1a1a;
+                border-bottom: 2px solid #333;
+            }
+
+            #playerBar span {
+                font-size: 0.95rem;
+                color: #ccc;
+            }
+
+            /* Highlight just the player's name in green */
+            #playerBar .player-name {
+                color: #4caf50;
+                font-weight: bold;
+            }
+
+            #logoutButton {
+                padding: 6px 16px;
+                background: transparent;
+                border: 1px solid #555;
+                border-radius: 6px;
+                color: #aaa;
+                font-size: 0.85rem;
+                cursor: pointer;
+                transition: border-color 0.2s, color 0.2s;
+            }
+
+            #logoutButton:hover {
+                border-color: #e57373;
+                color: #e57373;
+            }
+
         </style>
     </head>
     <body>
+
+        <!-- ============================================================
+             Player Bar
+             Shown after login. auth.js populates the name and handles
+             the logout button. Hidden by default.
+             ============================================================ -->
+        <div id="playerBar">
+            <span>Welcome, <span class="player-name" id="playerBarName"></span>!</span>
+            <button id="logoutButton">Log Out</button>
+        </div>
+
+        <!-- ============================================================
+             Spectator Banner
+             Visible to unauthenticated visitors. Clicking the button
+             opens the auth overlay. auth.js hides this on successful login.
+             ============================================================ -->
+        <div id="spectatorBanner">
+            <span>JOIN IN ON THE FUN! REGISTER OR LOGIN NOW!</span>
+            <button onclick="window.showAuthOverlay()">SIGN UP / LOG IN</button>
+        </div>
+
+        <!-- ============================================================
+             Auth Overlay
+             Shown on top of everything until the player logs in.
+             auth.js controls its visibility and wires up the forms.
+             ============================================================ -->
+        <div id="authOverlay">
+            <div id="authCard">
+
+                <!-- Close button — returns the visitor to spectator mode -->
+                <button id="authClose" onclick="document.getElementById('authOverlay').style.display='none'" title="Close">✕</button>
+
+                <h2>OpenRealm</h2>
+                <p class="subtitle">Sign in to enter the world</p>
+
+                <!-- Tab buttons — switch between Login and Register views -->
+                <div id="authTabs">
+                    <button class="authTab active" id="tabLogin">Log In</button>
+                    <button class="authTab"        id="tabRegister">Register</button>
+                </div>
+
+                <!-- Login Form — shown by default -->
+                <form class="authForm" id="formLogin" style="display: flex;">
+                    <label>
+                        Username
+                        <input type="text"     id="loginUsername" autocomplete="username"     required maxlength="20" />
+                    </label>
+                    <label>
+                        Password
+                        <input type="password" id="loginPassword" autocomplete="current-password" required />
+                    </label>
+                    <p class="authError" id="errorLogin"></p>
+                    <button type="submit">Log In</button>
+                </form>
+
+                <!-- Register Form — hidden until the Register tab is clicked -->
+                <form class="authForm" id="formRegister">
+                    <label>
+                        Username
+                        <input type="text"     id="regUsername"  autocomplete="username"     required maxlength="20" />
+                    </label>
+                    <label>
+                        Password
+                        <input type="password" id="regPassword"  autocomplete="new-password" required />
+                    </label>
+                    <label>
+                        Confirm Password
+                        <input type="password" id="regPassword2" autocomplete="new-password" required />
+                    </label>
+                    <p class="authError" id="errorRegister"></p>
+                    <button type="submit">Create Account</button>
+                </form>
+
+            </div>
+        </div>
 
         <h1>Welcome to OpenRealm!</h1>
 
@@ -178,6 +493,11 @@
         <!-- Our game logic. Loaded second because it depends on the
              Socket.IO library being available first. -->
         <script src="/game.js"></script>
+
+        <!-- Auth logic. Loaded after game.js so it can call window.joinGame(),
+             which is defined in game.js. It checks localStorage for a saved
+             session and either auto-joins or shows the login overlay. -->
+        <script src="/auth.js"></script>
 
     </body>
 </html>
