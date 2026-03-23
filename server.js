@@ -94,6 +94,12 @@ const WORLD_HEIGHT = 600;
 io.on("connection", (socket) => {
     console.log("Player connected:", socket.id);
 
+    // Send the current player list to spectators immediately on connect.
+    // This lets unauthenticated visitors see other players moving around
+    // before they decide to register. They receive the same playerMoved
+    // broadcasts as everyone else, so the view stays live.
+    socket.emit("currentPlayers", players);
+
     // --- Event: "join" ---
     // Fired by the client right after connecting, sending the player's
     // chosen name and starting position.
