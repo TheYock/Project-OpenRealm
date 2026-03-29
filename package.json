@@ -2,8 +2,9 @@
   "name": "project-openrealm",
   "version": "1.0.0",
   "description": "A real-time multiplayer web platform where players can interact, explore, and shape an evolving online world.",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

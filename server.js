@@ -68,7 +68,7 @@ const server = http.createServer(app);
 // broadcasting messages to all connected clients.
 const io = new Server(server);
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Tell Express to automatically serve any files in the "public" folder.
 // When a browser requests "/game.js", Express finds and returns
