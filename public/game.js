@@ -374,6 +374,14 @@ socket.on("playerDisconnected", (id) => {
     updatePlayerList();
 });
 
+// --- Event: "spectatorCount" ---
+// Sent by the server whenever the number of connected but unauthenticated
+// visitors changes. We update the spectator counter in the player list header.
+socket.on("spectatorCount", (count) => {
+    const el = document.getElementById("spectatorCount");
+    if (el) el.textContent = count;
+});
+
 // --- Event: "playerStatusUpdate" ---
 // Sent by the server when an admin mutes or freezes a player.
 // We update the affected player's flags and re-render the list

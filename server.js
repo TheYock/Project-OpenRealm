@@ -182,6 +182,16 @@ function removeBot(id) {
 // This callback runs every time a new client connects.
 // Each client gets their own 'socket' object — think of it as a
 // dedicated phone line between the server and that one player.
+// Calculates and broadcasts the current spectator count to all clients.
+// Spectators are sockets that are connected but haven't sent a "join" event.
+// Total connected sockets minus the number of active (non-bot) players gives us the count.
+function broadcastSpectatorCount() {
+    const activePlayers = Object.values(players).filter(p => !p.isBot).length;
+    const totalSockets  = io.sockets.sockets.size;
+    const spectators    = Math.max(0, totalSockets - activePlayers);
+    io.emit("spectatorCount", spectators);
+}
+
 io.on("connection", (socket) => {
     console.log("Player connected:", socket.id);
 
@@ -190,6 +200,9 @@ io.on("connection", (socket) => {
     // before they decide to register. They receive the same playerMoved
     // broadcasts as everyone else, so the view stays live.
     socket.emit("currentPlayers", players);
+
+    // A new socket just connected — spectator count goes up.
+    broadcastSpectatorCount();
 
     // --- Event: "join" ---
     // Fired by the client right after connecting, sending the player's
@@ -274,6 +287,9 @@ io.on("connection", (socket) => {
             name: "System",
             message: `${name} joined OpenRealm`
         });
+
+        // A spectator just became a player — spectator count goes down.
+        broadcastSpectatorCount();
     });
 
     // --- Event: "playerMove" ---
@@ -459,6 +475,9 @@ io.on("connection", (socket) => {
 
         // Tell all clients to remove this player from their local state.
         io.emit("playerDisconnected", socket.id);
+
+        // Someone left — recalculate the spectator count.
+        broadcastSpectatorCount();
     });
 });
 
