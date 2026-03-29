@@ -68,7 +68,7 @@ router.post("/register", async (req, res) => {
         // The token expires after 7 days — after that the player
         // will need to log in again.
         const token = jwt.sign(
-            { id: user._id, username: user.username },
+            { id: user._id, username: user.username, isAdmin: user.isAdmin },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
@@ -80,7 +80,8 @@ router.post("/register", async (req, res) => {
             user: {
                 id: user._id,
                 username: user.username,
-                avatar: user.avatar
+                avatar: user.avatar,
+                isAdmin: user.isAdmin
             }
         });
 
@@ -123,7 +124,7 @@ router.post("/login", async (req, res) => {
 
         // Sign a fresh token for this session.
         const token = jwt.sign(
-            { id: user._id, username: user.username },
+            { id: user._id, username: user.username, isAdmin: user.isAdmin },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
@@ -133,7 +134,8 @@ router.post("/login", async (req, res) => {
             user: {
                 id: user._id,
                 username: user.username,
-                avatar: user.avatar
+                avatar: user.avatar,
+                isAdmin: user.isAdmin
             }
         });
 

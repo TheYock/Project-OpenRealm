@@ -31,6 +31,10 @@ const http = require("http");
 // they can send and receive messages instantly without refreshing.
 const { Server } = require("socket.io");
 
+// jsonwebtoken lets us verify the JWT the client sends on join,
+// so we can confirm admin status server-side (never trust the client).
+const jwt = require("jsonwebtoken");
+
 // Mongoose is an ODM (Object Document Mapper) for MongoDB.
 // It lets us define schemas and interact with the database using
 // JavaScript objects instead of raw MongoDB queries.
@@ -38,6 +42,7 @@ const mongoose = require("mongoose");
 
 // Our auth routes — handles /api/register and /api/login.
 const authRoutes = require("./routes/auth");
+const User       = require("./models/User");
 
 // --- Database Connection ---
 // Connect to MongoDB Atlas using the URI stored in .env.
@@ -80,12 +85,98 @@ app.use("/api", authRoutes);
 // Values are player data objects: { name, x, y, chatBubble, chatTimestamp }
 const players = {};
 
+// Maps username → socket ID so we can detect and kick duplicate logins.
+// When the same account joins from a second tab/window, the first
+// connection is disconnected before the new one is registered.
+const userSockets = {};
+
 // Validation constants — used to sanitize data coming from clients.
 // Never trust data from the client directly; a bad actor could send
 // anything, so we clamp and validate everything on the server.
 const MAX_NAME_LENGTH = 20;
 const WORLD_WIDTH = 800;
 const WORLD_HEIGHT = 600;
+
+// ============================================================
+// Bot System
+// ============================================================
+// Bots are fake players stored in the players dictionary just
+// like real ones, but keyed with a "bot_" prefix and driven by
+// a server-side interval rather than socket input.
+// botIntervals maps botId → intervalId so we can clear it on removal.
+// ============================================================
+const botIntervals = {};
+let botCounter = 0; // Incremented each time a bot is created for unique IDs
+
+function createBot(x, y) {
+    const id   = `bot_${++botCounter}`;
+    const name = `Bot${botCounter}`;
+
+    players[id] = {
+        name,
+        x,
+        y,
+        size:          20,
+        chatBubble:    "",
+        chatTimestamp: 0,
+        muted:         false,
+        frozen:        false,
+        isAdmin:       false,
+        isBot:         true,        // Flag so clients can distinguish bots
+        joinedAt:      Date.now()
+    };
+
+    // Tell all clients a new "player" (bot) has appeared.
+    io.emit("newPlayer", { id, name, x, y, isBot: true, joinedAt: players[id].joinedAt });
+
+    // Bots wander by picking a new random target every 2–4 seconds
+    // and moving toward it in small steps each tick (100ms).
+    let targetX = x;
+    let targetY = y;
+
+    const pickTarget = () => {
+        // Pick a random destination within world bounds.
+        targetX = Math.floor(Math.random() * (WORLD_WIDTH  - 20));
+        targetY = Math.floor(Math.random() * (WORLD_HEIGHT - 20));
+    };
+
+    pickTarget();
+    // Pick a new wander target every 2–4 seconds.
+    const wanderTimer = setInterval(pickTarget, 2000 + Math.random() * 2000);
+
+    // Move the bot 2px per tick toward its current target.
+    const moveTimer = setInterval(() => {
+        if (!players[id] || players[id].frozen) return;
+
+        const dx = targetX - players[id].x;
+        const dy = targetY - players[id].y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 2) {
+            players[id].x += (dx / dist) * 2;
+            players[id].y += (dy / dist) * 2;
+            io.emit("playerMoved", { id, x: players[id].x, y: players[id].y });
+        }
+    }, 100);
+
+    // Store both interval IDs so removeBot() can clean them up.
+    botIntervals[id] = [wanderTimer, moveTimer];
+
+    return id;
+}
+
+function removeBot(id) {
+    if (!players[id] || !players[id].isBot) return;
+
+    // Stop the bot's movement and wander timers.
+    if (botIntervals[id]) {
+        botIntervals[id].forEach(clearInterval);
+        delete botIntervals[id];
+    }
+
+    delete players[id];
+    io.emit("playerDisconnected", id);
+}
 
 // --- Socket.IO Connection Handler ---
 // This callback runs every time a new client connects.
@@ -120,13 +211,46 @@ io.on("connection", (socket) => {
         const x = Math.max(0, Math.min(Number(data.x) || 400, WORLD_WIDTH));
         const y = Math.max(0, Math.min(Number(data.y) || 300, WORLD_HEIGHT));
 
+        // --- Duplicate Login Check ---
+        // If this username is already connected on another socket, disconnect
+        // that old session before registering the new one. This prevents two
+        // copies of the same player appearing when someone opens a second tab.
+        if (userSockets[name]) {
+            const oldSocket = io.sockets.sockets.get(userSockets[name]);
+            if (oldSocket) {
+                oldSocket.emit("forcedDisconnect", "You logged in from another window.");
+                oldSocket.disconnect(true);
+            }
+        }
+
+        // Track which socket owns this username.
+        userSockets[name] = socket.id;
+
+        // --- Verify Token & Extract Admin Status ---
+        // The client sends its JWT on join. We verify it server-side so
+        // a player can't simply set isAdmin = true in their browser console.
+        let isAdmin = false;
+        if (data.token) {
+            try {
+                const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
+                isAdmin = decoded.isAdmin || false;
+            } catch (e) {
+                // Invalid or expired token — treat as non-admin and continue.
+            }
+        }
+        socket.data.isAdmin = isAdmin;
+
         // Store this player in our server-side dictionary.
         players[socket.id] = {
             name,
             x,
             y,
-            chatBubble: "",    // The last message this player sent (shown above their head)
-            chatTimestamp: 0   // When they sent it (used to expire the bubble after 3 seconds)
+            chatBubble:    "",
+            chatTimestamp: 0,
+            muted:         false,  // Muted players cannot send chat messages
+            frozen:        false,  // Frozen players cannot move
+            isAdmin,
+            joinedAt:      Date.now()  // Unix timestamp — used for join-time sort on the client
         };
 
         // Send the full current player list back to THIS player only.
@@ -137,10 +261,11 @@ io.on("connection", (socket) => {
         // Tell all OTHER connected clients that a new player has arrived.
         // socket.broadcast.emit() sends to everyone except the sender.
         socket.broadcast.emit("newPlayer", {
-            id: socket.id,
+            id:       socket.id,
             name,
             x,
-            y
+            y,
+            joinedAt: players[socket.id].joinedAt
         });
 
         // Announce in chat that this player joined.
@@ -156,8 +281,8 @@ io.on("connection", (socket) => {
     // We update the server's record and relay the new position to
     // all other players so their screens stay in sync.
     socket.on("playerMove", (data) => {
-        // Guard: make sure this socket has a registered player before acting.
-        if (players[socket.id]) {
+        // Guard: make sure this socket has a registered player and is not frozen.
+        if (players[socket.id] && !players[socket.id].frozen) {
             // Clamp the incoming coordinates to valid world bounds,
             // just like we did in "join" — clients could send anything.
             const x = Math.max(0, Math.min(Number(data.x) || 0, WORLD_WIDTH));
@@ -182,8 +307,9 @@ io.on("connection", (socket) => {
     // --- Event: "chatMessage" ---
     // Fired when a player sends a chat message.
     socket.on("chatMessage", (data) => {
-        // Guard: ignore messages from sockets that haven't joined yet.
+        // Guard: ignore messages from sockets that haven't joined or are muted.
         if (!players[socket.id]) return;
+        if (players[socket.id].muted) return;
 
         // Sanitize the message: must be a string, trimmed, max 200 characters.
         // This prevents spam, XSS attempts, or oversized payloads.
@@ -212,6 +338,97 @@ io.on("connection", (socket) => {
         });
     });
 
+    // --- Event: "spawnBot" ---
+    // Admin places a bot at a specific canvas position.
+    socket.on("spawnBot", ({ x, y }) => {
+        if (!socket.data.isAdmin) return;
+        const cx = Math.max(0, Math.min(Number(x) || 0, WORLD_WIDTH));
+        const cy = Math.max(0, Math.min(Number(y) || 0, WORLD_HEIGHT));
+        const botId = createBot(cx, cy);
+        const adminName = players[socket.id]?.name || "Admin";
+        io.emit("chatMessage", {
+            name: "System",
+            message: `${adminName} created ${players[botId].name}`
+        });
+    });
+
+    // --- Event: "removeBot" ---
+    // Admin removes a bot by its ID.
+    socket.on("removeBot", ({ botId }) => {
+        if (!socket.data.isAdmin) return;
+        if (!players[botId]) return;
+        const adminName = players[socket.id]?.name || "Admin";
+        const botName   = players[botId].name;
+        removeBot(botId);
+        io.emit("chatMessage", {
+            name: "System",
+            message: `${adminName} removed ${botName}`
+        });
+    });
+
+    // --- Event: "adminAction" ---
+    // Sent by admin clients to mute, unmute, freeze, or unfreeze a player.
+    // We verify isAdmin server-side — the client's claim alone is never trusted.
+    socket.on("adminAction", ({ targetId, action }) => {
+        if (!socket.data.isAdmin) return;
+        if (!players[targetId]) return;
+
+        if      (action === "mute")     players[targetId].muted  = true;
+        else if (action === "unmute")   players[targetId].muted  = false;
+        else if (action === "freeze")   players[targetId].frozen = true;
+        else if (action === "unfreeze") players[targetId].frozen = false;
+        else return;
+
+        // Broadcast the updated status to every client so badges update live.
+        io.emit("playerStatusUpdate", {
+            id:     targetId,
+            muted:  players[targetId].muted,
+            frozen: players[targetId].frozen
+        });
+
+        // Announce the action in chat so everyone can see it.
+        const adminName  = players[socket.id]?.name  || "Admin";
+        const targetName = players[targetId]?.name   || "Player";
+        io.emit("chatMessage", {
+            name: "System",
+            message: `${adminName} ${action}d ${targetName}`
+        });
+    });
+
+    // --- Event: "getProfile" ---
+    // Any logged-in player can request the public profile of another player.
+    // We respond only to the requester (socket.emit, not io.emit) with:
+    //   - name, avatar colour, joinedAt (from live players dict)
+    //   - createdAt (from MongoDB — when they registered their account)
+    // Bots don't have a DB record, so we return a simplified profile for them.
+    socket.on("getProfile", async ({ targetId }) => {
+        if (!players[socket.id]) return; // Must be logged in to view profiles
+        const target = players[targetId];
+        if (!target) return;
+
+        // Base profile from the live players dictionary.
+        const profile = {
+            id:       targetId,
+            name:     target.name,
+            avatar:   target.avatar || { color: target.isBot ? "#ffa726" : "#4caf50" },
+            joinedAt: target.joinedAt,
+            isBot:    target.isBot || false,
+            createdAt: null
+        };
+
+        // For real players, look up their registration date from MongoDB.
+        if (!target.isBot) {
+            try {
+                const user = await User.findOne({ username: target.name }, "createdAt");
+                if (user) profile.createdAt = user.createdAt;
+            } catch (e) {
+                console.error("getProfile DB error:", e.message);
+            }
+        }
+
+        socket.emit("profileData", profile);
+    });
+
     // --- Event: "disconnect" ---
     // Fires automatically when a player closes their browser tab,
     // loses connection, or navigates away.
@@ -229,6 +446,16 @@ io.on("connection", (socket) => {
         // Remove them from the server's player dictionary so they
         // no longer take up memory or appear in currentPlayers snapshots.
         delete players[socket.id];
+
+        // Clean up the username → socket mapping, but only if it still
+        // points to this socket. If a duplicate login already replaced it
+        // with a new socket ID, we don't want to wipe that newer entry.
+        for (const [username, sid] of Object.entries(userSockets)) {
+            if (sid === socket.id) {
+                delete userSockets[username];
+                break;
+            }
+        }
 
         // Tell all clients to remove this player from their local state.
         io.emit("playerDisconnected", socket.id);

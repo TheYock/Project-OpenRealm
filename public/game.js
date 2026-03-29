@@ -18,6 +18,14 @@ const socket = io();
 // is called with the authenticated username.
 let playerName = "";
 
+// The JWT returned by the server on login/register.
+// Sent to the server on "join" so it can verify admin status server-side.
+let authToken = "";
+
+// Whether the local player has admin privileges.
+// Decoded from the JWT payload — controls whether the right-click menu appears.
+let isAdmin = false;
+
 // --- Canvas Setup ---
 // Grab the <canvas> element from the HTML by its ID.
 const canvas = document.getElementById("gameCanvas");
@@ -73,26 +81,195 @@ let player = {
 let lastEmittedX = player.x;
 let lastEmittedY = player.y;
 
-// --- Keyboard Input ---
-// A dictionary that tracks which keys are currently held down.
-// Keys are stored as lowercase strings, e.g. keys["w"] = true.
-let keys = {};
+// --- Point-and-Click Movement ---
+// When the player clicks on the canvas, we store that position as a
+// movement target. Each frame, updatePlayer() moves the player toward
+// it and clears it once they arrive.
+// The target is the top-left corner we want the player square to reach,
+// calculated by offsetting from the click so the player centers on it.
+let moveTarget = null;
 
-// When a key is pressed down, record it as active.
-// We first check if the user is typing in an input field —
-// if so, we skip recording the key so chat doesn't accidentally
-// move the player.
-document.addEventListener("keydown", (e) => {
-    const activeTag = document.activeElement.tagName.toLowerCase();
-    if (activeTag === "input") return;
+canvas.addEventListener("click", (e) => {
+    // Only allow movement for logged-in players.
+    if (!playerName) return;
 
-    keys[e.key.toLowerCase()] = true;
+    // e.offsetX/offsetY give the click position relative to the canvas
+    // element itself (not the whole page), which is exactly what we need.
+    // We subtract half the player size so the player centers on the click
+    // rather than placing its top-left corner there.
+    moveTarget = {
+        x: e.offsetX - player.size / 2,
+        y: e.offsetY - player.size / 2
+    };
 });
 
-// When a key is released, mark it as inactive.
-document.addEventListener("keyup", (e) => {
-    keys[e.key.toLowerCase()] = false;
+// --- Canvas Right-Click Context Menu (Admin only) ---
+// Right-clicking on the canvas checks whether the cursor is over a bot.
+// If so, show "Remove Bot". Otherwise show "Spawn Bot Here".
+const canvasMenu = document.getElementById("canvasContextMenu");
+
+canvas.addEventListener("contextmenu", (e) => {
+    // Any logged-in player can right-click. Admin-only options are hidden below.
+    if (!playerName) return;
+    e.preventDefault();
+
+    const clickX = e.offsetX;
+    const clickY = e.offsetY;
+
+    // Check if the click landed on any player or bot.
+    // We iterate all players and test whether the click falls within
+    // each square's bounding box (x, y) to (x+size, y+size).
+    // We skip our own player — admins can't action themselves.
+    let hitBot    = null;
+    let hitPlayer = null;
+
+    for (const [id, p] of Object.entries(players)) {
+        if (id === myId) continue;
+        const size = p.size || 20;
+        if (clickX >= p.x && clickX <= p.x + size &&
+            clickY >= p.y && clickY <= p.y + size) {
+            if (p.isBot) hitBot    = id;
+            else         hitPlayer = id;
+            break;
+        }
+    }
+
+    const hitTarget = hitBot || hitPlayer; // Any hit target
+    const p = hitTarget ? players[hitTarget] : null;
+
+    // Spawn Bot — admin only, empty canvas space only
+    document.getElementById("ctxSpawnBot").style.display =
+        isAdmin && !hitTarget ? "block" : "none";
+
+    // Remove Bot — admin only, bot targets only
+    document.getElementById("ctxRemoveBot").style.display =
+        isAdmin && hitBot ? "block" : "none";
+
+    // Mute/Unmute — admin only, any target
+    const muteBtn = document.getElementById("ctxCanvasMute");
+    muteBtn.style.display = isAdmin && hitTarget ? "block" : "none";
+    if (p) muteBtn.textContent = p.muted ? "Unmute" : "Mute";
+
+    // Freeze/Unfreeze — admin only, any target
+    const freezeBtn = document.getElementById("ctxCanvasFreeze");
+    freezeBtn.style.display = isAdmin && hitTarget ? "block" : "none";
+    if (p) freezeBtn.textContent = p.frozen ? "Unfreeze" : "Freeze";
+
+    // View Profile — any logged-in player, real players only (not bots)
+    document.getElementById("ctxViewProfile").style.display =
+        hitPlayer ? "block" : "none";
+
+    // Show the "Admin" label and divider only when there are admin options
+    // AND there is also a general option (View Profile) below the line.
+    const hasAdminOptions = isAdmin && hitTarget;
+    const hasBothSections = hasAdminOptions && hitPlayer;
+    document.getElementById("ctxAdminLabel").style.display = hasAdminOptions ? "block" : "none";
+    document.getElementById("ctxDivider").style.display    = hasBothSections ? "block" : "none";
+
+    // Store context on the menu element for the button handlers below.
+    canvasMenu.dataset.targetId = hitTarget || "";
+    canvasMenu.dataset.botId    = hitBot    || "";
+    canvasMenu.dataset.spawnX   = clickX;
+    canvasMenu.dataset.spawnY   = clickY;
+
+    canvasMenu.style.left    = e.clientX + "px";
+    canvasMenu.style.top     = e.clientY + "px";
+    canvasMenu.style.display = "block";
 });
+
+document.getElementById("ctxSpawnBot").addEventListener("click", () => {
+    socket.emit("spawnBot", {
+        x: Number(canvasMenu.dataset.spawnX),
+        y: Number(canvasMenu.dataset.spawnY)
+    });
+    canvasMenu.style.display = "none";
+});
+
+document.getElementById("ctxRemoveBot").addEventListener("click", () => {
+    const botId = canvasMenu.dataset.botId;
+    if (botId) socket.emit("removeBot", { botId });
+    canvasMenu.style.display = "none";
+});
+
+document.getElementById("ctxCanvasMute").addEventListener("click", () => {
+    const targetId = canvasMenu.dataset.targetId;
+    if (!targetId) return;
+    const action = players[targetId]?.muted ? "unmute" : "mute";
+    socket.emit("adminAction", { targetId, action });
+    canvasMenu.style.display = "none";
+});
+
+document.getElementById("ctxCanvasFreeze").addEventListener("click", () => {
+    const targetId = canvasMenu.dataset.targetId;
+    if (!targetId) return;
+    const action = players[targetId]?.frozen ? "unfreeze" : "freeze";
+    socket.emit("adminAction", { targetId, action });
+    canvasMenu.style.display = "none";
+});
+
+document.getElementById("ctxViewProfile").addEventListener("click", () => {
+    const targetId = canvasMenu.dataset.targetId;
+    if (!targetId) return;
+    // Request the profile from the server — response comes back via "profileData"
+    socket.emit("getProfile", { targetId });
+    canvasMenu.style.display = "none";
+});
+
+// --- Event: "profileData" ---
+// Response to a "getProfile" request. Populates and opens the profile modal.
+socket.on("profileData", (profile) => {
+    // Draw the player icon onto the mini canvas inside the modal.
+    const iconCanvas = document.getElementById("profileIcon");
+    const iconCtx    = iconCanvas.getContext("2d");
+    iconCtx.clearRect(0, 0, iconCanvas.width, iconCanvas.height);
+    iconCtx.fillStyle = profile.avatar?.color || (profile.isBot ? "#ffa726" : "#4caf50");
+    iconCtx.fillRect(10, 10, 44, 44); // Centered square in the 64x64 canvas
+
+    // Name
+    document.getElementById("profileName").textContent = profile.name
+        + (profile.isBot ? " (Bot)" : "");
+
+    // Registered date — bots have no account
+    const regEl = document.getElementById("profileRegistered");
+    if (profile.createdAt) {
+        regEl.textContent = "Registered: " + new Date(profile.createdAt).toLocaleDateString(
+            undefined, { year: "numeric", month: "long", day: "numeric" }
+        );
+    } else {
+        regEl.textContent = profile.isBot ? "Bot — no account" : "Registration date unavailable";
+    }
+
+    // Session time — how long they've been online this visit
+    const sessionEl = document.getElementById("profileSession");
+    if (profile.joinedAt) {
+        const ms      = Date.now() - profile.joinedAt;
+        const minutes = Math.floor(ms / 60000);
+        const seconds = Math.floor((ms % 60000) / 1000);
+        sessionEl.textContent = `Online this session: ${minutes}m ${seconds}s`;
+    } else {
+        sessionEl.textContent = "";
+    }
+
+    document.getElementById("profileOverlay").style.display = "flex";
+});
+
+// Clicking anywhere else closes the canvas menu too.
+document.addEventListener("click", () => {
+    canvasMenu.style.display = "none";
+});
+
+// --- WASD Keyboard Input (commented out — may restore later) ---
+// let keys = {};
+//
+// document.addEventListener("keydown", (e) => {
+//     const activeTag = document.activeElement.tagName.toLowerCase();
+//     if (activeTag === "input") return;
+//     keys[e.key.toLowerCase()] = true;
+// });
+//
+// document.addEventListener("keyup", (e) => {
+//     keys[e.key.toLowerCase()] = false;
+// });
 
 // ============================================================
 // Socket.IO Event Handlers
@@ -110,7 +287,7 @@ socket.on("connect", () => {
     // (a race condition that can happen with a fast auto-login), the
     // name will already be set — emit join now to catch up.
     if (playerName) {
-        socket.emit("join", { name: playerName, x: player.x, y: player.y });
+        socket.emit("join", { name: playerName, x: player.x, y: player.y, token: authToken });
     }
 });
 
@@ -122,14 +299,33 @@ socket.on("connect", () => {
 // joined. Exposed on window so auth.js can call it even though
 // that file is loaded separately.
 // ============================================================
-window.joinGame = function(username) {
+window.joinGame = function(username, token) {
     playerName = username;
+    authToken  = token || "";
+
+    // Decode isAdmin from the JWT payload.
+    // The JWT payload is base64-encoded and readable by anyone —
+    // the signature is the secret part. We decode it here just to
+    // know whether to show the admin context menu. The server
+    // independently re-verifies the full token on "join".
+    if (authToken) {
+        try {
+            const payload = JSON.parse(atob(authToken.split(".")[1]));
+            isAdmin = payload.isAdmin || false;
+        } catch (e) {
+            isAdmin = false;
+        }
+    }
 
     // Only emit if the socket is already connected. If not,
     // the "connect" handler above will catch it when it fires.
     if (myId) {
-        socket.emit("join", { name: playerName, x: player.x, y: player.y });
+        socket.emit("join", { name: playerName, x: player.x, y: player.y, token: authToken });
     }
+
+    // Re-render the list so the local player's entry gets the "you" label
+    // and green highlight as soon as they log in.
+    updatePlayerList();
 };
 
 // --- Event: "currentPlayers" ---
@@ -142,6 +338,7 @@ socket.on("currentPlayers", (serverPlayers) => {
 
     // Copy all players from the server snapshot into our local dictionary.
     Object.assign(players, serverPlayers);
+    updatePlayerList();
 });
 
 // --- Event: "newPlayer" ---
@@ -149,10 +346,12 @@ socket.on("currentPlayers", (serverPlayers) => {
 // We add them to our local dictionary so they appear on screen.
 socket.on("newPlayer", (playerData) => {
     players[playerData.id] = {
-        ...playerData,       // Spread copies all properties (id, name, x, y)
-        chatBubble: "",      // New players start with no chat bubble
-        chatTimestamp: 0
+        ...playerData,
+        chatBubble:    "",
+        chatTimestamp: 0,
+        isBot:         playerData.isBot || false
     };
+    updatePlayerList();
 });
 
 // --- Event: "playerMoved" ---
@@ -172,6 +371,28 @@ socket.on("playerMoved", (playerData) => {
 // We remove them from our dictionary so they disappear from the canvas.
 socket.on("playerDisconnected", (id) => {
     delete players[id];
+    updatePlayerList();
+});
+
+// --- Event: "playerStatusUpdate" ---
+// Sent by the server when an admin mutes or freezes a player.
+// We update the affected player's flags and re-render the list
+// so the badges appear (or disappear) immediately for everyone.
+socket.on("playerStatusUpdate", ({ id, muted, frozen }) => {
+    if (players[id]) {
+        players[id].muted  = muted;
+        players[id].frozen = frozen;
+        updatePlayerList();
+    }
+});
+
+// --- Event: "forcedDisconnect" ---
+// Sent by the server when the same account logs in from another window.
+// We alert the player and reload the page, putting them back into
+// spectator mode so the new session can take over cleanly.
+socket.on("forcedDisconnect", (reason) => {
+    alert(reason);
+    location.reload();
 });
 
 // --- Event: "chatMessage" ---
@@ -192,6 +413,184 @@ socket.on("chatMessage", (data) => {
 // ============================================================
 // Chat UI Functions
 // ============================================================
+
+// ============================================================
+// Player List Sort State
+// ============================================================
+// Tracks the active sort field ("join" or "name") and direction
+// ("asc" or "desc"). Clicking a sort button updates these and
+// re-renders the list. Clicking the already-active button toggles
+// the direction.
+// ============================================================
+let sortField = "join";
+let sortDir   = "asc";
+
+// Wire up sort buttons once the DOM is ready.
+document.querySelectorAll(".sortBtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        const field = btn.dataset.sort;
+
+        if (sortField === field) {
+            // Same field clicked — toggle direction.
+            // asc → desc → asc ...
+            sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+            // New field — switch to it, default to ascending.
+            sortField = field;
+            sortDir   = "asc";
+        }
+
+        // Sync the arrow label and active highlight across all buttons.
+        document.querySelectorAll(".sortBtn").forEach((b) => {
+            const isActive = b.dataset.sort === sortField;
+            b.classList.toggle("active", isActive);
+            if (isActive) {
+                // Update the arrow to reflect current direction.
+                const label = field === "join" ? "Join" : "Name";
+                b.textContent = label + (sortDir === "asc" ? " ↑" : " ↓");
+            }
+        });
+
+        updatePlayerList();
+    });
+});
+
+// Rebuilds the player list panel from the current players dictionary.
+// Called whenever someone joins, leaves, or the sort option changes.
+function updatePlayerList() {
+    const listEl = document.getElementById("playerList");
+    const countEl = document.getElementById("playerCount");
+
+    // Remove all existing entries but keep the header row.
+    listEl.querySelectorAll(".playerEntry").forEach((el) => el.remove());
+
+    // Convert the players dictionary into an array of [id, playerObj] pairs
+    // so we can sort them before rendering.
+    // Using Object.entries() gives us both the key (socket ID) and the value
+    // (player data) together, which is more convenient than sorting just IDs.
+    const entries = Object.entries(players);
+
+    // --- Sorting ---
+    // Array.sort() takes a comparator function that returns:
+    //   negative  → a comes first
+    //   positive  → b comes first
+    //   zero      → order unchanged
+    //
+    // For ascending order we do (a - b) for numbers or a.localeCompare(b) for strings.
+    // For descending we flip the operands: (b - a) or b.localeCompare(a).
+    entries.sort(([, a], [, b]) => {
+        if (sortField === "name") {
+            // localeCompare does a proper alphabetical comparison that handles
+            // accented characters and is case-insensitive when used with the
+            // sensitivity option — better than a simple < / > comparison.
+            const cmp = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+            return sortDir === "asc" ? cmp : -cmp;
+        } else {
+            // Sort by join time (Unix timestamp, numeric comparison).
+            const cmp = (a.joinedAt || 0) - (b.joinedAt || 0);
+            return sortDir === "asc" ? cmp : -cmp;
+        }
+    });
+
+    const ids = Object.keys(players);
+    countEl.textContent = ids.length;
+
+    entries.forEach(([id, p]) => {
+
+        const entry = document.createElement("div");
+        entry.className = "playerEntry" + (id === myId ? " me" : "");
+        // Store the socket ID so the right-click handler knows who was clicked.
+        entry.dataset.playerId = id;
+
+        // Green dot to indicate the player is online.
+        const dot = document.createElement("span");
+        dot.className = "dot";
+
+        // Player name — "(you)" appended for the local player.
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = p.name + (id === myId ? " (you)" : "");
+
+        entry.appendChild(dot);
+        entry.appendChild(nameSpan);
+
+        // Status badges — shown when an admin has muted or frozen the player.
+        if (p.muted) {
+            const badge = document.createElement("span");
+            badge.className = "statusBadge muted";
+            badge.textContent = "muted";
+            entry.appendChild(badge);
+        }
+        if (p.frozen) {
+            const badge = document.createElement("span");
+            badge.className = "statusBadge frozen";
+            badge.textContent = "frozen";
+            entry.appendChild(badge);
+        }
+
+        listEl.appendChild(entry);
+    });
+}
+
+// ============================================================
+// Admin Context Menu
+// ============================================================
+// Right-clicking a player entry in the list opens a small menu
+// with Mute/Unmute and Freeze/Unfreeze options.
+// Only visible when the local player is an admin.
+// ============================================================
+
+let contextTargetId = null;
+const contextMenu = document.getElementById("contextMenu");
+
+// Delegate right-click handling to the player list container.
+// This means we only need one listener regardless of how many entries exist.
+document.getElementById("playerList").addEventListener("contextmenu", (e) => {
+    if (!isAdmin) return;
+
+    // Walk up from the clicked element to find the nearest .playerEntry.
+    const entry = e.target.closest(".playerEntry");
+    if (!entry) return;
+
+    e.preventDefault();
+
+    const targetId = entry.dataset.playerId;
+    if (!targetId || targetId === myId) return; // Can't admin-action yourself
+
+    contextTargetId = targetId;
+    const p = players[targetId];
+    if (!p) return;
+
+    // Update the menu header and button labels to reflect current status.
+    document.getElementById("contextPlayerName").textContent = p.name;
+    document.getElementById("ctxMute").textContent   = p.muted  ? "Unmute"   : "Mute";
+    document.getElementById("ctxFreeze").textContent = p.frozen ? "Unfreeze" : "Freeze";
+
+    // Position the menu at the cursor and show it.
+    contextMenu.style.left    = e.clientX + "px";
+    contextMenu.style.top     = e.clientY + "px";
+    contextMenu.style.display = "block";
+});
+
+// Mute / Unmute button
+document.getElementById("ctxMute").addEventListener("click", () => {
+    if (!contextTargetId) return;
+    const action = players[contextTargetId]?.muted ? "unmute" : "mute";
+    socket.emit("adminAction", { targetId: contextTargetId, action });
+    contextMenu.style.display = "none";
+});
+
+// Freeze / Unfreeze button
+document.getElementById("ctxFreeze").addEventListener("click", () => {
+    if (!contextTargetId) return;
+    const action = players[contextTargetId]?.frozen ? "unfreeze" : "freeze";
+    socket.emit("adminAction", { targetId: contextTargetId, action });
+    contextMenu.style.display = "none";
+});
+
+// Clicking anywhere else closes the menu.
+document.addEventListener("click", () => {
+    contextMenu.style.display = "none";
+});
 
 // Creates a new div for a message and appends it to the chat panel.
 // textContent is used (not innerHTML) to prevent XSS — any HTML in
@@ -228,6 +627,33 @@ function sendChatMessage() {
 // Allow sending by clicking the button...
 sendButton.addEventListener("click", sendChatMessage);
 
+// --- Profile Modal ---
+const profileOverlay = document.getElementById("profileOverlay");
+
+document.getElementById("profileClose").addEventListener("click", () => {
+    profileOverlay.style.display = "none";
+});
+
+profileOverlay.addEventListener("click", (e) => {
+    if (e.target === profileOverlay) profileOverlay.style.display = "none";
+});
+
+// --- Help Modal ---
+const helpOverlay = document.getElementById("helpOverlay");
+
+document.getElementById("helpButton").addEventListener("click", () => {
+    helpOverlay.style.display = "flex";
+});
+
+document.getElementById("helpClose").addEventListener("click", () => {
+    helpOverlay.style.display = "none";
+});
+
+// Clicking the dark backdrop behind the card also closes it.
+helpOverlay.addEventListener("click", (e) => {
+    if (e.target === helpOverlay) helpOverlay.style.display = "none";
+});
+
 // ...or by pressing Enter while focused on the chat input.
 chatInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -244,13 +670,46 @@ function updatePlayer() {
     // Spectators haven't logged in yet — don't move anything.
     if (!playerName) return;
 
-    // Move the player based on which keys are currently held down.
-    // Y increases downward on a canvas, so W subtracts from Y (move up)
-    // and S adds to Y (move down).
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
+    // Frozen players cannot move — the server will also reject any
+    // playerMove events they send, but we skip client-side movement
+    // too so the player gets instant feedback.
+    if (players[myId] && players[myId].frozen) {
+        moveTarget = null;
+        return;
+    }
+
+    // --- Point-and-Click Movement ---
+    // If there's an active target, move the player toward it each frame.
+    if (moveTarget) {
+        const dx = moveTarget.x - player.x; // Horizontal distance to target
+        const dy = moveTarget.y - player.y; // Vertical distance to target
+
+        // Math.hypot() gives us the straight-line distance between the
+        // player and the target using the Pythagorean theorem (a²+b²=c²).
+        const distance = Math.hypot(dx, dy);
+
+        if (distance <= player.speed) {
+            // Close enough — snap to the target and stop moving.
+            // Without this snap, the player would jitter back and forth
+            // around the target because it keeps overshooting by tiny amounts.
+            player.x = moveTarget.x;
+            player.y = moveTarget.y;
+            moveTarget = null;
+        } else {
+            // Normalize the direction vector (dx/distance, dy/distance) to get
+            // a unit vector — a vector of length 1 pointing toward the target.
+            // Multiplying by player.speed then gives a step of exactly that length,
+            // so the player always moves at a consistent speed regardless of angle.
+            player.x += (dx / distance) * player.speed;
+            player.y += (dy / distance) * player.speed;
+        }
+    }
+
+    // --- WASD Movement (commented out — may restore later) ---
+    // if (keys["w"]) player.y -= player.speed;
+    // if (keys["s"]) player.y += player.speed;
+    // if (keys["a"]) player.x -= player.speed;
+    // if (keys["d"]) player.x += player.speed;
 
     // Clamp the player's position so they can't move off the canvas edges.
     // player.size is subtracted from the right/bottom edges so the whole
@@ -287,6 +746,173 @@ function updatePlayer() {
 // ============================================================
 // Drawing Functions
 // ============================================================
+
+// ============================================================
+// Chat Text Effects (RuneScape-style)
+// ============================================================
+// Players can prefix their message with an effect name followed
+// by a colon to trigger a visual effect on their chat bubble.
+//
+// Supported prefixes (case-insensitive):
+//   wave:    — characters bob up and down in a sine wave
+//   wave2:   — wave with alternating red/yellow colouring
+//   shake:   — each character jitters randomly every frame
+//   scroll:  — text slides back and forth horizontally
+//   glow1:   — red → yellow colour gradient cycling across characters
+//   glow2:   — blue → cyan colour gradient cycling
+//   glow3:   — green → white colour gradient cycling
+//   flash1:  — whole text flashes between red and yellow
+//   flash2:  — whole text flashes between blue and cyan
+//   flash3:  — whole text flashes between green and white
+//
+// Example: typing "wave:Hello!" displays "Hello!" with a wave effect.
+// ============================================================
+
+// Ordered longest-first so "wave2" is matched before "wave".
+const EFFECT_PREFIXES = [
+    "wave2", "wave", "shake", "scroll",
+    "glow1", "glow2", "glow3",
+    "flash1", "flash2", "flash3"
+];
+
+// Named colours available as chat prefixes.
+// Values are valid CSS colour strings passed directly to fillStyle.
+const COLOUR_MAP = {
+    red:     "#cc0000",
+    green:   "#008800",
+    blue:    "#0000cc",
+    yellow:  "#cccc00",
+    cyan:    "#00aaaa",
+    purple:  "#880088",
+    white:   "#ffffff",
+    orange:  "#cc6600",
+    pink:    "#cc0066",
+    lime:    "#00cc00"
+};
+
+// Parses an optional colour prefix then an optional effect prefix from a message.
+// Supports any combination in the order: [colour:][effect:]text
+//
+// Examples:
+//   "red:wave:Hello!"  → { colour: "#cc0000", effect: "wave",  text: "Hello!" }
+//   "blue:Hello!"      → { colour: "#0000cc", effect: null,    text: "Hello!" }
+//   "wave:Hello!"      → { colour: null,      effect: "wave",  text: "Hello!" }
+//   "Hello!"           → { colour: null,      effect: null,    text: "Hello!" }
+function parseEffect(message) {
+    let colour = null;
+    let effect = null;
+    let remaining = message;
+
+    // Check for a colour prefix first.
+    const lowerRemaining = remaining.toLowerCase();
+    for (const name of Object.keys(COLOUR_MAP)) {
+        if (lowerRemaining.startsWith(name + ":")) {
+            colour    = COLOUR_MAP[name];
+            remaining = remaining.slice(name.length + 1);
+            break;
+        }
+    }
+
+    // Then check for an effect prefix in what's left.
+    const lowerEffect = remaining.toLowerCase();
+    for (const fx of EFFECT_PREFIXES) {
+        if (lowerEffect.startsWith(fx + ":")) {
+            effect    = fx;
+            remaining = remaining.slice(fx.length + 1);
+            break;
+        }
+    }
+
+    return { colour, effect, text: remaining };
+}
+
+// Renders text character-by-character with the given effect and colour applied.
+// colour overrides the default black — effects that cycle colour internally
+// will ignore it (glow/flash), but positional effects (wave/shake/scroll) use it.
+// centerX/baseY are the centre-bottom anchor.
+function drawEffectText(ctx, text, centerX, baseY, effect, colour) {
+    // t is a continuously increasing time value (seconds) used to animate effects.
+    const t = Date.now() / 1000;
+
+    ctx.font      = "12px Arial";
+    ctx.textAlign = "left"; // We'll position each character manually
+
+    // Measure total width so we can start at the correct X to keep
+    // the text centred inside the bubble.
+    const totalWidth = ctx.measureText(text).width;
+    let x = centerX - totalWidth / 2;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch       = text[i];
+        const charWidth = ctx.measureText(ch).width;
+        let dx = 0, dy = 0;
+
+        switch (effect) {
+            // ---- Positional effects ----
+
+            // Positional effects — colour prefix applies; falls back to black.
+            case "wave":
+                dy = Math.sin(t * 4 + i * 0.6) * 3;
+                ctx.fillStyle = colour || "black";
+                break;
+
+            case "wave2":
+                // wave2 has its own built-in alternating colours; colour prefix ignored.
+                dy = Math.sin(t * 4 + i * 0.8) * 4;
+                ctx.fillStyle = i % 2 === 0 ? "#cc0000" : "#ffcc00";
+                break;
+
+            case "shake":
+                dx = (Math.random() - 0.5) * 4;
+                dy = (Math.random() - 0.5) * 4;
+                ctx.fillStyle = colour || "black";
+                break;
+
+            case "scroll": {
+                const slideRange = Math.min(totalWidth * 0.4, 20);
+                dx = Math.sin(t * 1.5) * slideRange;
+                ctx.fillStyle = colour || "#006600";
+                break;
+            }
+
+            // Colour-cycling effects — colour prefix ignored (they manage their own hues).
+            case "glow1":
+                ctx.fillStyle = `hsl(${(t * 40 + i * 15) % 60}, 100%, 40%)`;
+                break;
+
+            case "glow2":
+                ctx.fillStyle = `hsl(${180 + (t * 40 + i * 15) % 60}, 100%, 45%)`;
+                break;
+
+            case "glow3":
+                ctx.fillStyle = `hsl(${90 + (t * 40 + i * 15) % 60}, 100%, 38%)`;
+                break;
+
+            case "flash1":
+                ctx.fillStyle = Math.sin(t * 6) > 0 ? "#dd0000" : "#ffcc00";
+                break;
+
+            case "flash2":
+                ctx.fillStyle = Math.sin(t * 6) > 0 ? "#0000cc" : "#00cccc";
+                break;
+
+            case "flash3":
+                ctx.fillStyle = Math.sin(t * 6) > 0 ? "#008800" : "#ffffff";
+                break;
+
+            default:
+                // No effect — just apply the colour if one was set.
+                ctx.fillStyle = colour || "black";
+        }
+
+        ctx.fillText(ch, x + dx, baseY + dy);
+        x += charWidth; // Advance to the next character position
+    }
+
+    // Reset state so subsequent drawing calls aren't affected.
+    ctx.textAlign = "center";
+    ctx.fillStyle = "black";
+}
 
 // Draws a rectangle with rounded corners using canvas arc/curve commands.
 // Parameters: ctx = drawing context, x/y = top-left corner, w/h = size, r = corner radius
@@ -325,8 +951,14 @@ function draw() {
         const size = p.size || 20;
 
         // Draw the player square.
-        // Our own player is lime green; everyone else is red.
-        ctx.fillStyle = id === myId ? "lime" : "red";
+        // Bots are orange, frozen players are blue, local player is lime, others are red.
+        if (p.frozen) {
+            ctx.fillStyle = "#64b5f6";
+        } else if (p.isBot) {
+            ctx.fillStyle = "#ffa726"; // Orange — clearly distinct from real players
+        } else {
+            ctx.fillStyle = id === myId ? "lime" : "red";
+        }
         ctx.fillRect(p.x, p.y, size, size);
 
         // --- Draw Player Name ---
@@ -343,18 +975,50 @@ function draw() {
             nameY = p.y + 30;
         }
 
-        // Measure the text width so we can clamp the horizontal position.
-        // This prevents the name from being cut off at the left or right edges.
-        const nameWidth = ctx.measureText(p.name).width;
+        // Build the display name with status suffixes appended.
+        // e.g. "PlayerName", "PlayerName - Muted", "PlayerName - Frozen", "PlayerName - Muted - Frozen"
+        let displayName = p.name;
+        if (p.muted)  displayName += " - Muted";
+        if (p.frozen) displayName += " - Frozen";
 
-        // Math.max clamps to the left boundary; Math.min clamps to the right.
-        // The + 5 / - 5 adds a small padding gap from the canvas edge.
+        // Measure the full display name for edge clamping.
+        const nameWidth = ctx.measureText(displayName).width;
+
         const nameX = Math.max(
             nameWidth / 2 + 5,
             Math.min(canvas.width - nameWidth / 2 - 5, p.x + size / 2)
         );
 
-        ctx.fillText(p.name, nameX, nameY);
+        // Draw each part of the name in the appropriate colour.
+        // We split into segments so "PlayerName" stays white while
+        // the status suffixes are coloured orange/blue.
+        if (!p.muted && !p.frozen) {
+            ctx.fillStyle = "white";
+            ctx.fillText(displayName, nameX, nameY);
+        } else {
+            // Measure just the base name to find the split point.
+            const baseWidth  = ctx.measureText(p.name).width;
+            const totalWidth = ctx.measureText(displayName).width;
+            const startX     = nameX - totalWidth / 2; // left edge of the full string
+
+            ctx.fillStyle = "white";
+            ctx.textAlign = "left";
+            ctx.fillText(p.name, startX, nameY);
+
+            let offsetX = startX + baseWidth;
+            if (p.muted) {
+                ctx.fillStyle = "#ffa726"; // Orange
+                const seg = p.frozen ? " - Muted" : " - Muted";
+                ctx.fillText(seg, offsetX, nameY);
+                offsetX += ctx.measureText(seg).width;
+            }
+            if (p.frozen) {
+                ctx.fillStyle = "#64b5f6"; // Blue
+                ctx.fillText(" - Frozen", offsetX, nameY);
+            }
+
+            ctx.textAlign = "center"; // Restore for the rest of the draw loop
+        }
 
         // --- Draw Chat Bubble ---
         // How long (in milliseconds) the bubble stays visible after a message.
@@ -362,12 +1026,15 @@ function draw() {
 
         // Only draw the bubble if there's a message AND it hasn't expired yet.
         if (p.chatBubble && Date.now() - p.chatTimestamp < bubbleDuration) {
-            const bubbleText = p.chatBubble;
+
+            // Strip any colour/effect prefixes from the raw message.
+            // e.g. "red:wave:Hello!" → { colour: "#cc0000", effect: "wave", text: "Hello!" }
+            const { colour, effect, text: bubbleText } = parseEffect(p.chatBubble);
 
             ctx.font = "12px Arial";
             ctx.textAlign = "center";
 
-            // Measure the message text so we can size the bubble to fit it.
+            // Measure the display text (without the prefix) to size the bubble.
             const textWidth = ctx.measureText(bubbleText).width;
             const bubbleWidth = textWidth + 20;  // 10px padding on each side
             const bubbleHeight = 24;
@@ -398,10 +1065,16 @@ function draw() {
             ctx.stroke();  // Stroke uses the path we already defined with drawRoundedRect
 
             // Draw the message text centered inside the bubble.
-            // We use bubbleX + bubbleWidth/2 (bubble center) rather than player center,
-            // because the bubble may have been pushed sideways by the edge clamping.
-            ctx.fillStyle = "black";
-            ctx.fillText(bubbleText, bubbleX + bubbleWidth / 2, bubbleY + 16);
+            // If an effect prefix was found, drawEffectText handles per-character
+            // animation. Otherwise it falls back to plain black text.
+            if (effect || colour) {
+                // drawEffectText handles both animated effects and plain colour.
+                // Passing effect=null with a colour just applies the solid colour.
+                drawEffectText(ctx, bubbleText, bubbleX + bubbleWidth / 2, bubbleY + 16, effect, colour);
+            } else {
+                ctx.fillStyle = "black";
+                ctx.fillText(bubbleText, bubbleX + bubbleWidth / 2, bubbleY + 16);
+            }
 
             // --- Draw the Tail ---
             // The tail is a small triangle that points from the bubble toward the player,

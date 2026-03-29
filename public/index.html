@@ -95,6 +95,192 @@
                 color: white;
             }
 
+            /* ============================================================
+               Player Profile Modal
+               ============================================================ */
+            #profileOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.85);
+                z-index: 1500;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #profileCard {
+                position: relative;
+                background: #1e1e1e;
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 32px 28px;
+                width: 340px;
+                box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+            }
+
+            #profileClose {
+                position: absolute;
+                top: 14px;
+                right: 16px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.3rem;
+                cursor: pointer;
+            }
+
+            #profileClose:hover { color: white; }
+
+            #profileHeader {
+                display: flex;
+                align-items: center;
+                gap: 18px;
+            }
+
+            #profileIcon {
+                border: 2px solid #444;
+                border-radius: 8px;
+                background: #2b2b2b;
+                flex-shrink: 0;
+            }
+
+            #profileInfo h2 {
+                margin: 0 0 8px;
+                font-size: 1.2rem;
+                color: #4caf50;
+            }
+
+            #profileInfo p {
+                margin: 4px 0;
+                font-size: 0.82rem;
+                color: #aaa;
+            }
+
+            /* --- Help Button --- */
+            #helpButton {
+                padding: 10px 12px;
+                border: none;
+                background: #333;
+                color: #aaa;
+                cursor: pointer;
+                font-size: 0.95rem;
+                transition: background 0.2s, color 0.2s;
+                border-right: 1px solid #444;
+            }
+
+            #helpButton:hover {
+                background: #444;
+                color: white;
+            }
+
+            /* ============================================================
+               Help Modal
+               ============================================================ */
+            #helpOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.85);
+                z-index: 1500;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #helpCard {
+                position: relative;
+                background: #1e1e1e;
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 32px 28px;
+                width: 480px;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+            }
+
+            #helpCard h2 {
+                margin: 0 0 20px;
+                color: #4caf50;
+                font-size: 1.5rem;
+                letter-spacing: 1px;
+            }
+
+            #helpClose {
+                position: absolute;
+                top: 14px;
+                right: 16px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.3rem;
+                cursor: pointer;
+            }
+
+            #helpClose:hover { color: white; }
+
+            .helpSection {
+                margin-bottom: 22px;
+            }
+
+            .helpSection h3 {
+                margin: 0 0 10px;
+                font-size: 0.85rem;
+                color: #4caf50;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                border-bottom: 1px solid #333;
+                padding-bottom: 4px;
+            }
+
+            .helpSection p {
+                margin: 0 0 8px;
+                color: #aaa;
+                font-size: 0.85rem;
+            }
+
+            .helpTable {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.85rem;
+            }
+
+            .helpTable td {
+                padding: 4px 8px;
+                color: #ccc;
+            }
+
+            .helpTable td:first-child {
+                width: 90px;
+            }
+
+            .helpTable tr:hover td {
+                background: #2b2b2b;
+            }
+
+            .helpTable code {
+                color: #4caf50;
+                font-family: monospace;
+            }
+
+            .colourGrid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px 16px;
+                font-family: monospace;
+                font-size: 0.9rem;
+                margin-bottom: 8px;
+            }
+
+            .helpHint {
+                font-size: 0.8rem;
+                color: #666;
+            }
+
+            .helpHint code {
+                color: #4caf50;
+                font-family: monospace;
+            }
+
             /* --- Send Button --- */
             #sendButton {
                 padding: 10px 15px;
@@ -308,6 +494,179 @@
                 cursor: not-allowed;
             }
 
+            /* ============================================================
+               Player List
+               Sits at the top of the right-hand column, above the chat.
+               Fixed max-height with scroll so it doesn't push chat away
+               when many players are online.
+               ============================================================ */
+            #playerList {
+                border-bottom: 1px solid #333;
+                padding: 10px;
+                max-height: 160px;
+                overflow-y: auto;
+                flex-shrink: 0;             /* Don't let flexbox squish it */
+            }
+
+            /* Header row inside the player list — count on left, sort buttons on right */
+            #playerListHeader {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 8px;
+            }
+
+            #playerList h3 {
+                margin: 0;
+                font-size: 0.75rem;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            /* Sort button row */
+            #sortControls {
+                display: flex;
+                gap: 4px;
+            }
+
+            .sortBtn {
+                padding: 2px 7px;
+                background: transparent;
+                border: 1px solid #444;
+                border-radius: 4px;
+                color: #666;
+                font-size: 0.72rem;
+                cursor: pointer;
+                transition: color 0.15s, border-color 0.15s;
+                white-space: nowrap;
+            }
+
+            .sortBtn:hover {
+                color: #ccc;
+                border-color: #666;
+            }
+
+            /* Active sort button is highlighted green */
+            .sortBtn.active {
+                color: #4caf50;
+                border-color: #4caf50;
+            }
+
+            /* A single row in the player list */
+            .playerEntry {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 3px 0;
+                font-size: 0.85rem;
+                color: #ccc;
+            }
+
+            /* Green dot indicator — shows the player is online */
+            .playerEntry .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #4caf50;
+                flex-shrink: 0;
+            }
+
+            /* Highlight the local player's own entry */
+            .playerEntry.me {
+                color: #4caf50;
+                font-weight: bold;
+            }
+
+            /* ============================================================
+               Admin Context Menu
+               Appears on right-click over a player list entry.
+               'position: fixed' lets us place it at the exact cursor
+               position using clientX/clientY from the mouse event.
+               ============================================================ */
+            #canvasContextMenu,
+            #contextMenu {
+                display: none;
+                position: fixed;
+                z-index: 2000;
+                background: #1e1e1e;
+                border: 1px solid #444;
+                border-radius: 8px;
+                min-width: 150px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+                overflow: hidden;
+            }
+
+            /* Player name header at the top of the menu */
+            .contextTitle {
+                padding: 8px 14px;
+                font-size: 0.78rem;
+                color: #888;
+                border-bottom: 1px solid #333;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            /* "Admin" label at the top of the admin section */
+            .contextAdminLabel {
+                padding: 6px 14px 4px;
+                font-size: 0.7rem;
+                color: #e57373;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-weight: bold;
+            }
+
+            /* Horizontal rule separating admin options from general options */
+            .contextDivider {
+                border-top: 1px solid #333;
+                margin: 4px 0;
+            }
+
+            /* Each action button spans the full width of the menu */
+            #canvasContextMenu button,
+            #contextMenu button {
+                display: block;
+                width: 100%;
+                padding: 10px 14px;
+                background: none;
+                border: none;
+                color: #ccc;
+                text-align: left;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+
+            #canvasContextMenu button:hover,
+            #contextMenu button:hover {
+                background: #2b2b2b;
+                color: white;
+            }
+
+            /* ============================================================
+               Status Badges (player list)
+               Shown next to a player's name when they are muted or frozen.
+               ============================================================ */
+            .statusBadge {
+                font-size: 0.7rem;
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .statusBadge.muted {
+                background: rgba(255, 167, 38, 0.2);
+                color: #ffa726;
+            }
+
+            .statusBadge.frozen {
+                background: rgba(100, 181, 246, 0.2);
+                color: #64b5f6;
+            }
+
             /* Error message displayed below the form on failure */
             .authError {
                 font-size: 0.83rem;
@@ -452,8 +811,23 @@
                  and the boundary checks in game.js. -->
             <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-            <!-- Chat panel: a flex column containing the message list and input bar. -->
+            <!-- Right column: player list stacked above the chat panel. -->
             <div id="chatContainer">
+
+                <!-- Player list — populated dynamically by game.js.
+                     Shows every connected player with a green dot.
+                     The local player's entry is highlighted in green. -->
+                <div id="playerList">
+                    <!-- Header row: player count + sort controls -->
+                    <div id="playerListHeader">
+                        <h3>Online — <span id="playerCount">0</span></h3>
+                        <!-- Sort buttons: each click cycles through asc → desc → off for that field -->
+                        <div id="sortControls">
+                            <button class="sortBtn active" data-sort="join" data-dir="asc" title="Sort by join time">Join ↑</button>
+                            <button class="sortBtn" data-sort="name" data-dir="asc" title="Sort by name">Name ↑</button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Scrollable area where chat messages are appended by game.js.
                      Starts empty — messages are added dynamically via JavaScript. -->
@@ -461,6 +835,9 @@
 
                 <!-- Input row at the bottom of the chat panel. -->
                 <div id="chatInputContainer">
+
+                    <!-- ? button opens the help modal -->
+                    <button id="helpButton" title="Help">?</button>
 
                     <!-- Text input for typing messages.
                          'maxlength' enforces the 200 character limit in the browser,
@@ -488,6 +865,96 @@
         <!-- Socket.IO client library, automatically served by the Socket.IO
              server at this fixed path. It provides the global io() function
              used in game.js to connect to the server. -->
+        <!-- ============================================================
+             Help Modal
+             Opened by the ? button in the chat bar. Explains chat
+             effects, colours, and controls. Add new sections here as
+             features are added.
+             ============================================================ -->
+        <div id="helpOverlay">
+            <div id="helpCard">
+                <button id="helpClose" title="Close">✕</button>
+                <h2>OpenRealm Help</h2>
+
+                <div class="helpSection">
+                    <h3>Movement</h3>
+                    <p>Click anywhere on the game world to move your player there.</p>
+                </div>
+
+                <div class="helpSection">
+                    <h3>Chat Effects</h3>
+                    <p>Type an effect prefix before your message to animate it in your bubble:</p>
+                    <table class="helpTable">
+                        <tr><td><code>wave:</code></td><td>Characters bob in a sine wave</td></tr>
+                        <tr><td><code>wave2:</code></td><td>Steeper wave, alternating red/yellow</td></tr>
+                        <tr><td><code>shake:</code></td><td>Characters jitter randomly</td></tr>
+                        <tr><td><code>scroll:</code></td><td>Text slides side to side</td></tr>
+                        <tr><td><code>glow1:</code></td><td>Red → yellow cycling gradient</td></tr>
+                        <tr><td><code>glow2:</code></td><td>Blue → cyan cycling gradient</td></tr>
+                        <tr><td><code>glow3:</code></td><td>Green → lime cycling gradient</td></tr>
+                        <tr><td><code>flash1:</code></td><td>Flashes red / yellow</td></tr>
+                        <tr><td><code>flash2:</code></td><td>Flashes blue / cyan</td></tr>
+                        <tr><td><code>flash3:</code></td><td>Flashes green / white</td></tr>
+                    </table>
+                </div>
+
+                <div class="helpSection">
+                    <h3>Chat Colours</h3>
+                    <p>Add a colour prefix before your message or effect:</p>
+                    <div class="colourGrid">
+                        <span style="color:#cc0000">red:</span>
+                        <span style="color:#008800">green:</span>
+                        <span style="color:#0000cc">blue:</span>
+                        <span style="color:#cccc00">yellow:</span>
+                        <span style="color:#00aaaa">cyan:</span>
+                        <span style="color:#880088">purple:</span>
+                        <span style="color:#ffffff">white:</span>
+                        <span style="color:#cc6600">orange:</span>
+                        <span style="color:#cc0066">pink:</span>
+                        <span style="color:#00cc00">lime:</span>
+                    </div>
+                    <p class="helpHint">Combine colour + effect: <code>red:wave:Hello!</code></p>
+                    <p class="helpHint">Colour only: <code>blue:Hello!</code></p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Admin Context Menu — Player List (mute/freeze)
+             Hidden by default. game.js positions and shows it on right-click of a player entry. -->
+        <div id="contextMenu">
+            <div class="contextTitle" id="contextPlayerName"></div>
+            <button id="ctxMute">Mute</button>
+            <button id="ctxFreeze">Freeze</button>
+        </div>
+
+        <!-- Admin Context Menu — Canvas (spawn/remove bots)
+             Shown on right-click of the game canvas for admin players only. -->
+        <div id="canvasContextMenu">
+            <div class="contextAdminLabel" id="ctxAdminLabel">Admin</div>
+            <button id="ctxSpawnBot">Spawn Bot Here</button>
+            <button id="ctxRemoveBot">Remove Bot</button>
+            <button id="ctxCanvasMute">Mute</button>
+            <button id="ctxCanvasFreeze">Freeze</button>
+            <div class="contextDivider" id="ctxDivider"></div>
+            <button id="ctxViewProfile">View Profile</button>
+        </div>
+
+        <!-- Player Profile Modal -->
+        <div id="profileOverlay">
+            <div id="profileCard">
+                <button id="profileClose" title="Close">✕</button>
+                <div id="profileHeader">
+                    <canvas id="profileIcon" width="64" height="64"></canvas>
+                    <div id="profileInfo">
+                        <h2 id="profileName"></h2>
+                        <p id="profileRegistered"></p>
+                        <p id="profileSession"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script src="/socket.io/socket.io.js"></script>
 
         <!-- Our game logic. Loaded second because it depends on the

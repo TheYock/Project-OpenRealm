@@ -29,6 +29,13 @@ const userSchema = new mongoose.Schema({
         required: true
     },
 
+    // Whether this user has admin privileges.
+    // Set via the makeAdmin.js console script — never by the client.
+    isAdmin: {
+        type: Boolean,
+        default: false
+    },
+
     // Avatar customization options.
     // 'default' means these values are used automatically if not provided.
     avatar: {

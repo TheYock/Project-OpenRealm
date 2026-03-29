@@ -42,7 +42,7 @@ if (savedToken && savedUsername) {
         document.getElementById("spectatorBanner").style.display = "none";
         showPlayerBar(savedUsername);
         window.enableChat();
-        window.joinGame(savedUsername);
+        window.joinGame(savedUsername, savedToken);
     }, 0);
 }
 // If no session, do nothing — the player lands as a spectator.
@@ -112,8 +112,9 @@ function enterGame(token, username) {
     // Enable the chat input now that the player is authenticated.
     window.enableChat();
 
-    // Tell game.js to join — emits the "join" event to the server.
-    window.joinGame(username);
+    // Tell game.js to join — passes the token so it can be sent to the
+    // server on the "join" event for admin verification.
+    window.joinGame(username, token);
 }
 
 // ============================================================
