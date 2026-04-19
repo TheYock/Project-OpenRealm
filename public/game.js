@@ -103,6 +103,74 @@ canvas.addEventListener("click", (e) => {
     };
 });
 
+// --- Duration Picker ---
+// Shared picker shown when an admin selects Mute or Freeze.
+// Stores the pending action and target until a duration button is clicked.
+const durationPicker = document.getElementById("durationPicker");
+let durationPendingAction = null;
+let durationPendingTarget = null;
+
+function showDurationPicker(action, targetId, left, top) {
+    document.getElementById("durationPickerTitle").textContent =
+        action === "mute" ? "Mute for how long?" : "Freeze for how long?";
+    durationPendingAction = action;
+    durationPendingTarget = targetId;
+    durationPicker.style.left    = left;
+    durationPicker.style.top     = top;
+    durationPicker.style.display = "block";
+}
+
+durationPicker.addEventListener("click", (e) => e.stopPropagation());
+
+document.querySelectorAll("#durationPicker button[data-minutes]").forEach(btn => {
+    btn.addEventListener("click", () => {
+        if (!durationPendingTarget || !durationPendingAction) return;
+        const minutes = parseInt(btn.dataset.minutes, 10);
+        socket.emit("adminAction", {
+            targetId: durationPendingTarget,
+            action:   durationPendingAction,
+            duration: minutes > 0 ? minutes : null   // 0 = Permanent → no duration
+        });
+        durationPicker.style.display = "none";
+        durationPendingAction = null;
+        durationPendingTarget = null;
+    });
+});
+
+// --- Avatar Color Customizer ---
+// The avatar button in the player bar shows the current color and opens
+// a swatch panel where the player can pick a preset or custom hex color.
+// Changes are saved to MongoDB and broadcast live to all other players.
+
+function syncAvatarButton(color) {
+    const btn = document.getElementById("avatarColorBtn");
+    if (btn) btn.style.background = color;
+}
+
+function applyAvatarColor(color) {
+    if (!playerName || !myId) return;
+    if (players[myId]) players[myId].avatar = { color };
+    syncAvatarButton(color);
+    socket.emit("updateAvatar", { color });
+    document.getElementById("avatarPanel").style.display = "none";
+}
+
+document.getElementById("avatarColorBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById("avatarPanel");
+    panel.style.display = panel.style.display === "block" ? "none" : "block";
+});
+
+document.getElementById("avatarPanel").addEventListener("click", (e) => e.stopPropagation());
+
+document.querySelectorAll("#avatarSwatches .swatch").forEach(swatch => {
+    swatch.addEventListener("click", () => applyAvatarColor(swatch.dataset.color));
+});
+
+document.getElementById("avatarCustomColor").addEventListener("input", (e) => {
+    applyAvatarColor(e.target.value);
+});
+
 // --- Canvas Right-Click Context Menu (Admin only) ---
 // Right-clicking on the canvas checks whether the cursor is over a bot.
 // If so, show "Remove Bot". Otherwise show "Spawn Bot Here".
@@ -191,20 +259,30 @@ document.getElementById("ctxRemoveBot").addEventListener("click", () => {
     canvasMenu.style.display = "none";
 });
 
-document.getElementById("ctxCanvasMute").addEventListener("click", () => {
+document.getElementById("ctxCanvasMute").addEventListener("click", (e) => {
     const targetId = canvasMenu.dataset.targetId;
     if (!targetId) return;
     const action = players[targetId]?.muted ? "unmute" : "mute";
-    socket.emit("adminAction", { targetId, action });
     canvasMenu.style.display = "none";
+    if (action === "unmute") {
+        socket.emit("adminAction", { targetId, action });
+    } else {
+        e.stopPropagation();
+        showDurationPicker(action, targetId, canvasMenu.style.left, canvasMenu.style.top);
+    }
 });
 
-document.getElementById("ctxCanvasFreeze").addEventListener("click", () => {
+document.getElementById("ctxCanvasFreeze").addEventListener("click", (e) => {
     const targetId = canvasMenu.dataset.targetId;
     if (!targetId) return;
     const action = players[targetId]?.frozen ? "unfreeze" : "freeze";
-    socket.emit("adminAction", { targetId, action });
     canvasMenu.style.display = "none";
+    if (action === "unfreeze") {
+        socket.emit("adminAction", { targetId, action });
+    } else {
+        e.stopPropagation();
+        showDurationPicker(action, targetId, canvasMenu.style.left, canvasMenu.style.top);
+    }
 });
 
 document.getElementById("ctxViewProfile").addEventListener("click", () => {
@@ -253,9 +331,11 @@ socket.on("profileData", (profile) => {
     document.getElementById("profileOverlay").style.display = "flex";
 });
 
-// Clicking anywhere else closes the canvas menu too.
+// Clicking anywhere else closes the canvas menu, duration picker, and avatar panel.
 document.addEventListener("click", () => {
-    canvasMenu.style.display = "none";
+    canvasMenu.style.display     = "none";
+    durationPicker.style.display = "none";
+    document.getElementById("avatarPanel").style.display = "none";
 });
 
 // --- WASD Keyboard Input (commented out — may restore later) ---
@@ -338,6 +418,12 @@ socket.on("currentPlayers", (serverPlayers) => {
 
     // Copy all players from the server snapshot into our local dictionary.
     Object.assign(players, serverPlayers);
+
+    // Sync the avatar color button to whatever color was loaded from the DB.
+    if (myId && players[myId]?.avatar?.color) {
+        syncAvatarButton(players[myId].avatar.color);
+    }
+
     updatePlayerList();
 });
 
@@ -372,6 +458,15 @@ socket.on("playerMoved", (playerData) => {
 socket.on("playerDisconnected", (id) => {
     delete players[id];
     updatePlayerList();
+});
+
+// --- Event: "playerAvatarUpdate" ---
+// Sent by the server when any player changes their avatar color.
+// We update the local players dictionary so the new color renders immediately.
+socket.on("playerAvatarUpdate", ({ id, avatar }) => {
+    if (players[id]) players[id].avatar = avatar;
+    // If it's our own update, keep the button preview in sync too.
+    if (id === myId) syncAvatarButton(avatar.color);
 });
 
 // --- Event: "spectatorCount" ---
@@ -553,51 +648,81 @@ const contextMenu = document.getElementById("contextMenu");
 // Delegate right-click handling to the player list container.
 // This means we only need one listener regardless of how many entries exist.
 document.getElementById("playerList").addEventListener("contextmenu", (e) => {
-    if (!isAdmin) return;
+    // Any logged-in player can right-click. Admin options are hidden below for non-admins.
+    if (!playerName) return;
 
-    // Walk up from the clicked element to find the nearest .playerEntry.
     const entry = e.target.closest(".playerEntry");
     if (!entry) return;
 
     e.preventDefault();
 
     const targetId = entry.dataset.playerId;
-    if (!targetId || targetId === myId) return; // Can't admin-action yourself
+    if (!targetId || targetId === myId) return;
 
     contextTargetId = targetId;
     const p = players[targetId];
     if (!p) return;
 
-    // Update the menu header and button labels to reflect current status.
+    // Header — player name
     document.getElementById("contextPlayerName").textContent = p.name;
-    document.getElementById("ctxMute").textContent   = p.muted  ? "Unmute"   : "Mute";
-    document.getElementById("ctxFreeze").textContent = p.frozen ? "Unfreeze" : "Freeze";
 
-    // Position the menu at the cursor and show it.
+    // Admin section — only visible to admins, hidden for bots on View Profile
+    const isRealPlayer = !p.isBot;
+    document.getElementById("ctxListAdminLabel").style.display = isAdmin ? "block" : "none";
+    document.getElementById("ctxMute").style.display           = isAdmin ? "block" : "none";
+    document.getElementById("ctxFreeze").style.display         = isAdmin ? "block" : "none";
+    if (isAdmin) {
+        document.getElementById("ctxMute").textContent   = p.muted  ? "Unmute"   : "Mute";
+        document.getElementById("ctxFreeze").textContent = p.frozen ? "Unfreeze" : "Freeze";
+    }
+
+    // Divider and View Profile — shown for real players only
+    document.getElementById("ctxListDivider").style.display    = isAdmin && isRealPlayer ? "block" : "none";
+    document.getElementById("ctxListViewProfile").style.display = isRealPlayer ? "block" : "none";
+
     contextMenu.style.left    = e.clientX + "px";
     contextMenu.style.top     = e.clientY + "px";
     contextMenu.style.display = "block";
 });
 
 // Mute / Unmute button
-document.getElementById("ctxMute").addEventListener("click", () => {
+document.getElementById("ctxMute").addEventListener("click", (e) => {
     if (!contextTargetId) return;
     const action = players[contextTargetId]?.muted ? "unmute" : "mute";
-    socket.emit("adminAction", { targetId: contextTargetId, action });
     contextMenu.style.display = "none";
+    if (action === "unmute") {
+        socket.emit("adminAction", { targetId: contextTargetId, action });
+    } else {
+        e.stopPropagation();
+        showDurationPicker(action, contextTargetId, contextMenu.style.left, contextMenu.style.top);
+    }
 });
 
 // Freeze / Unfreeze button
-document.getElementById("ctxFreeze").addEventListener("click", () => {
+document.getElementById("ctxFreeze").addEventListener("click", (e) => {
     if (!contextTargetId) return;
     const action = players[contextTargetId]?.frozen ? "unfreeze" : "freeze";
-    socket.emit("adminAction", { targetId: contextTargetId, action });
+    contextMenu.style.display = "none";
+    if (action === "unfreeze") {
+        socket.emit("adminAction", { targetId: contextTargetId, action });
+    } else {
+        e.stopPropagation();
+        showDurationPicker(action, contextTargetId, contextMenu.style.left, contextMenu.style.top);
+    }
+});
+
+// View Profile button (player list)
+document.getElementById("ctxListViewProfile").addEventListener("click", () => {
+    if (!contextTargetId) return;
+    socket.emit("getProfile", { targetId: contextTargetId });
     contextMenu.style.display = "none";
 });
 
-// Clicking anywhere else closes the menu.
+// Clicking anywhere else closes the player list menu, duration picker, and avatar panel.
 document.addEventListener("click", () => {
-    contextMenu.style.display = "none";
+    contextMenu.style.display    = "none";
+    durationPicker.style.display = "none";
+    document.getElementById("avatarPanel").style.display = "none";
 });
 
 // Creates a new div for a message and appends it to the chat panel.
@@ -958,16 +1083,25 @@ function draw() {
         // (e.g. players received from the server before size was added).
         const size = p.size || 20;
 
-        // Draw the player square.
-        // Bots are orange, frozen players are blue, local player is lime, others are red.
-        if (p.frozen) {
-            ctx.fillStyle = "#64b5f6";
-        } else if (p.isBot) {
-            ctx.fillStyle = "#ffa726"; // Orange — clearly distinct from real players
-        } else {
-            ctx.fillStyle = id === myId ? "lime" : "red";
-        }
+        // Draw the player square in their chosen avatar color.
+        // Bots are always orange; real players use their saved color (default green).
+        ctx.fillStyle = p.isBot ? "#ffa726" : (p.avatar?.color || "#4caf50");
         ctx.fillRect(p.x, p.y, size, size);
+
+        // Frozen players get a blue outline drawn inside the square.
+        if (p.frozen) {
+            ctx.strokeStyle = "#64b5f6";
+            ctx.lineWidth   = 2;
+            ctx.strokeRect(p.x + 1, p.y + 1, size - 2, size - 2);
+        }
+
+        // The local player gets a white outline drawn outside the square
+        // so they can always find themselves on screen regardless of color.
+        if (id === myId) {
+            ctx.strokeStyle = "white";
+            ctx.lineWidth   = 2;
+            ctx.strokeRect(p.x - 1, p.y - 1, size + 2, size + 2);
+        }
 
         // --- Draw Player Name ---
         ctx.fillStyle = "white";

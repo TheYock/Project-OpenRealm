@@ -192,6 +192,46 @@ function broadcastSpectatorCount() {
     io.emit("spectatorCount", spectators);
 }
 
+// --- scheduleExpiry ---
+// Sets a setTimeout to auto-reverse a timed mute or freeze for `targetId`.
+// Expects players[targetId].muteExpiresAt / freezeExpiresAt to already be set.
+// When the timer fires it clears the in-memory state, updates MongoDB,
+// and broadcasts the change to all clients.
+function scheduleExpiry(targetId, type) {
+    const timerKey  = type === "mute" ? "muteTimer"       : "freezeTimer";
+    const expiryKey = type === "mute" ? "muteExpiresAt"   : "freezeExpiresAt";
+    const statusKey = type === "mute" ? "muted"           : "frozen";
+    const dbKey     = type === "mute" ? "muteRemainingMs" : "freezeRemainingMs";
+
+    const remaining = players[targetId][expiryKey] - Date.now();
+
+    if (remaining <= 0) {
+        // Expiry already passed (e.g. player was offline longer than the duration).
+        players[targetId][statusKey] = false;
+        User.updateOne({ username: players[targetId].name }, { [dbKey]: null }).catch(() => {});
+        return;
+    }
+
+    players[targetId][timerKey] = setTimeout(async () => {
+        if (!players[targetId]) return; // player disconnected in the meantime
+        players[targetId][statusKey] = false;
+        players[targetId][timerKey]  = null;
+        players[targetId][expiryKey] = null;
+
+        await User.updateOne({ username: players[targetId].name }, { [dbKey]: null });
+
+        io.emit("playerStatusUpdate", {
+            id:     targetId,
+            muted:  players[targetId].muted,
+            frozen: players[targetId].frozen
+        });
+        io.emit("chatMessage", {
+            name:    "System",
+            message: `${players[targetId].name}'s ${type} has expired`
+        });
+    }, remaining);
+}
+
 io.on("connection", (socket) => {
     console.log("Player connected:", socket.id);
 
@@ -207,7 +247,7 @@ io.on("connection", (socket) => {
     // --- Event: "join" ---
     // Fired by the client right after connecting, sending the player's
     // chosen name and starting position.
-    socket.on("join", (data) => {
+    socket.on("join", async (data) => {
 
         // Sanitize the name: make sure it's a string, remove leading/trailing
         // spaces, and cap it at MAX_NAME_LENGTH characters.
@@ -266,6 +306,39 @@ io.on("connection", (socket) => {
             joinedAt:      Date.now()  // Unix timestamp — used for join-time sort on the client
         };
 
+        // --- Restore active mute/freeze from MongoDB ---
+        // The timer was paused when the player last disconnected. We resume it
+        // here using the remaining milliseconds stored in their DB record.
+        // -1 = permanent (no timer needed), positive = resume countdown.
+        try {
+            const user = await User.findOne(
+                { username: name },
+                "muteRemainingMs freezeRemainingMs avatar"
+            );
+            if (user) {
+                // Restore avatar color saved from a previous session.
+                players[socket.id].avatar = { color: user.avatar?.color || "#4caf50" };
+
+                if (user.muteRemainingMs !== null && user.muteRemainingMs !== undefined) {
+                    players[socket.id].muted = true;
+                    if (user.muteRemainingMs > 0) {
+                        players[socket.id].muteExpiresAt = Date.now() + user.muteRemainingMs;
+                        scheduleExpiry(socket.id, "mute");
+                    }
+                    // -1 = permanent: muted stays true, no timer set
+                }
+                if (user.freezeRemainingMs !== null && user.freezeRemainingMs !== undefined) {
+                    players[socket.id].frozen = true;
+                    if (user.freezeRemainingMs > 0) {
+                        players[socket.id].freezeExpiresAt = Date.now() + user.freezeRemainingMs;
+                        scheduleExpiry(socket.id, "freeze");
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("join DB restore error:", e.message);
+        }
+
         // Send the full current player list back to THIS player only.
         // socket.emit() targets only the sender — the new player needs to
         // know about everyone already in the game.
@@ -278,8 +351,21 @@ io.on("connection", (socket) => {
             name,
             x,
             y,
+            muted:    players[socket.id].muted,
+            frozen:   players[socket.id].frozen,
+            avatar:   players[socket.id].avatar,
             joinedAt: players[socket.id].joinedAt
         });
+
+        // If the rejoining player has an active restriction, broadcast their
+        // status so all clients show the correct badges immediately.
+        if (players[socket.id].muted || players[socket.id].frozen) {
+            io.emit("playerStatusUpdate", {
+                id:     socket.id,
+                muted:  players[socket.id].muted,
+                frozen: players[socket.id].frozen
+            });
+        }
 
         // Announce in chat that this player joined.
         // io.emit() sends to ALL clients including the sender.
@@ -384,16 +470,54 @@ io.on("connection", (socket) => {
 
     // --- Event: "adminAction" ---
     // Sent by admin clients to mute, unmute, freeze, or unfreeze a player.
+    // Optional `duration` (minutes) auto-reverses mute/freeze after that time.
+    // Timed actions are persisted to MongoDB so the timer pauses between sessions —
+    // re-logging resumes the countdown from where it left off, not from zero.
+    // `duration` null = permanent; omitted entirely for unmute/unfreeze.
     // We verify isAdmin server-side — the client's claim alone is never trusted.
-    socket.on("adminAction", ({ targetId, action }) => {
+    socket.on("adminAction", async ({ targetId, action, duration }) => {
         if (!socket.data.isAdmin) return;
         if (!players[targetId]) return;
+
+        // Note whether a timed restriction was active before we clear it —
+        // used below to include a "timer cleared" note in the chat message.
+        const hadActiveTimer = (action === "unmute"   && !!players[targetId].muteTimer)
+                            || (action === "unfreeze" && !!players[targetId].freezeTimer);
+
+        // Clear any existing auto-expire timer for this status type before changing it.
+        if (action === "mute" || action === "unmute") {
+            clearTimeout(players[targetId].muteTimer);
+            players[targetId].muteTimer     = null;
+            players[targetId].muteExpiresAt = null;
+        }
+        if (action === "freeze" || action === "unfreeze") {
+            clearTimeout(players[targetId].freezeTimer);
+            players[targetId].freezeTimer     = null;
+            players[targetId].freezeExpiresAt = null;
+        }
 
         if      (action === "mute")     players[targetId].muted  = true;
         else if (action === "unmute")   players[targetId].muted  = false;
         else if (action === "freeze")   players[targetId].frozen = true;
         else if (action === "unfreeze") players[targetId].frozen = false;
         else return;
+
+        // Persist to MongoDB for real players so the restriction survives re-logins.
+        // Bots have no DB record, so we skip them.
+        if (!players[targetId].isBot) {
+            const isMuteType = action === "mute"   || action === "unmute";
+            const isRemoving = action === "unmute" || action === "unfreeze";
+            const dbKey      = isMuteType ? "muteRemainingMs" : "freezeRemainingMs";
+            // null = cleared, -1 = permanent sentinel, positive = ms remaining
+            const dbValue    = isRemoving ? null
+                             : duration   ? duration * 60 * 1000
+                             :              -1;
+            try {
+                await User.updateOne({ username: players[targetId].name }, { [dbKey]: dbValue });
+            } catch (e) {
+                console.error("adminAction DB error:", e.message);
+            }
+        }
 
         // Broadcast the updated status to every client so badges update live.
         io.emit("playerStatusUpdate", {
@@ -405,10 +529,40 @@ io.on("connection", (socket) => {
         // Announce the action in chat so everyone can see it.
         const adminName  = players[socket.id]?.name  || "Admin";
         const targetName = players[targetId]?.name   || "Player";
+        const pastTense  = { mute: "muted", unmute: "unmuted", freeze: "froze", unfreeze: "unfroze" };
+        const durationLabel   = duration       ? ` for ${duration} minute${duration === 1 ? "" : "s"}` : "";
+        const timerClearedNote = hadActiveTimer ? " (timer cleared)" : "";
         io.emit("chatMessage", {
             name: "System",
-            message: `${adminName} ${action}d ${targetName}`
+            message: `${adminName} ${pastTense[action]} ${targetName}${durationLabel}${timerClearedNote}`
         });
+
+        // Schedule auto-expiry for timed mute/freeze (not permanent).
+        if (duration && (action === "mute" || action === "freeze")) {
+            const expiryKey = action === "mute" ? "muteExpiresAt" : "freezeExpiresAt";
+            players[targetId][expiryKey] = Date.now() + duration * 60 * 1000;
+            scheduleExpiry(targetId, action);
+        }
+    });
+
+    // --- Event: "updateAvatar" ---
+    // Sent when a player picks a new avatar color from the swatch panel.
+    // We validate the hex value server-side before saving to prevent injection,
+    // update the in-memory player, persist to MongoDB, and broadcast to all
+    // clients so the change is visible to everyone immediately.
+    socket.on("updateAvatar", async ({ color }) => {
+        if (!players[socket.id]) return;
+        if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+
+        players[socket.id].avatar = { color };
+
+        try {
+            await User.updateOne({ username: players[socket.id].name }, { "avatar.color": color });
+        } catch (e) {
+            console.error("updateAvatar DB error:", e.message);
+        }
+
+        io.emit("playerAvatarUpdate", { id: socket.id, avatar: { color } });
     });
 
     // --- Event: "getProfile" ---
@@ -458,6 +612,27 @@ io.on("connection", (socket) => {
         }
 
         console.log("Player disconnected:", socket.id);
+
+        // Pause timed mute/freeze: write the remaining ms back to MongoDB so the
+        // countdown resumes from where it left off when the player rejoins.
+        if (players[socket.id] && !players[socket.id].isBot) {
+            const p = players[socket.id];
+            const updates = {};
+
+            if (p.muteTimer && p.muteExpiresAt) {
+                updates.muteRemainingMs = Math.max(0, p.muteExpiresAt - Date.now());
+            }
+            if (p.freezeTimer && p.freezeExpiresAt) {
+                updates.freezeRemainingMs = Math.max(0, p.freezeExpiresAt - Date.now());
+            }
+
+            if (Object.keys(updates).length) {
+                User.updateOne({ username: p.name }, updates).catch(() => {});
+            }
+
+            clearTimeout(p.muteTimer);
+            clearTimeout(p.freezeTimer);
+        }
 
         // Remove them from the server's player dictionary so they
         // no longer take up memory or appear in currentPlayers snapshots.

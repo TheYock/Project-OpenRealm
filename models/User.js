@@ -36,6 +36,19 @@ const userSchema = new mongoose.Schema({
         default: false
     },
 
+    // Remaining milliseconds of active mute/freeze as of last logout.
+    // null = no restriction, -1 = permanent, positive = timed (ms remaining).
+    // Persisted so re-logging cannot bypass a timed action.
+    muteRemainingMs: {
+        type: Number,
+        default: null
+    },
+
+    freezeRemainingMs: {
+        type: Number,
+        default: null
+    },
+
     // Avatar customization options.
     // 'default' means these values are used automatically if not provided.
     avatar: {
