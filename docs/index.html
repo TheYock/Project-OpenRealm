@@ -265,7 +265,20 @@
 
     <!-- PASTE YOUR SELF-ASSESSMENT TEXT BELOW, REPLACING THIS BLOCK -->
     <p>
-        [PASTE SELF-ASSESSMENT HERE — copy the text from Self-assessment.docx]
+        George Yockachonis
+CS-499
+4/18/26
+Professor Kraya
+Throughout this Computer Science program, my perspective on development has changed a lot. When I first started, I was interested in coding, but I didn’t fully understand what it meant to build real systems or think like a software engineer. Over time, that shifted. Instead of just writing code that works, I started focusing on how things are structured, how they scale, and how different pieces connect. That change came from both coursework and the projects I worked on outside of class.
+One of the biggest things I’ve taken away from this program is how important communication is in this field. It’s not just about writing code, it’s about explaining what that code does and why it was designed a certain way. Through writing assignments, project narratives, and my code review, I’ve gotten better at breaking down technical concepts in a way that makes sense to different audiences. That’s something I also apply in my current role, where I work with different teams to support systems and troubleshoot issues. Being able to clearly explain what’s happening has become a real strength.
+A big part of my growth has come from building my own projects, especially my multiplayer game and engine. I made the decision to step away from traditional game engines and build my own tools from the ground up. That process forced me to understand software design on a deeper level, including how to structure code, separate responsibilities, and manage real-time communication between systems. It pushed me to solve problems I wouldn’t normally face using prebuilt tools, and that experience has shaped how I approach development.
+Through that work, I’ve also applied concepts related to algorithms and data structures in a practical way. Managing multiple players in real time, handling movement updates efficiently, and keeping systems synchronized required me to think about performance and organization. I’ve learned to approach problems not just by making them work, but by making them work efficiently.
+Database design is another area where I’ve grown. I’ve worked with both structured and unstructured data, and in my projects I implemented MongoDB to handle user data and authentication. This included storing user accounts, hashing passwords, and managing JSON-based data. It gave me a better understanding of how data supports full-stack applications and how everything connects behind the scenes.
+Security is something I’ve also become more aware of throughout this program. I’ve learned to think about potential vulnerabilities and build with that in mind. In my projects, I’ve implemented password hashing and token-based authentication, and I now understand how important it is to protect data and ensure system reliability.
+The artifacts included in my ePortfolio reflect this growth across multiple areas. Each enhancement focuses on improving a different part of my work, whether that’s software design, performance, or database integration. Together, they show not just what I can build, but how I improve and refine solutions over time.
+Overall, this program has helped me grow from someone who could write code into someone who can design and build systems with purpose. I feel more confident in my skills and more focused on where I want to go next, especially in software development and systems design. This ePortfolio represents both what I’ve accomplished and the direction I’m continuing to grow in.
+
+
     </p>
     <!-- END SELF-ASSESSMENT -->
 
@@ -315,7 +328,14 @@
         </div>
 
         <!-- PASTE ENHANCEMENT 1 NARRATIVE BELOW -->
-        <p>[PASTE MILESTONE 2 NARRATIVE HERE — copy from Milestone 2.docx]</p>
+        <p>Enhancement One: Software Design and Engineering
+The artifact selected for this enhancement is my OpenRealm project, a real-time multiplayer web application developed using Node.js, Express, and Socket.IO. The application allows multiple users to connect to a shared environment, move their characters in real time, and communicate through a chat system. The original version of this project was created as a prototype to demonstrate client-server communication and real-time event handling.
+I selected this artifact for my ePortfolio because it demonstrates several important full-stack development concepts, including real-time networking, client-server architecture, and interactive front-end design. This project aligns well with my professional interests, especially in areas related to system design and network-based applications.
+The original version of OpenRealm relied entirely on in-memory data, meaning that player identities and session data were not persistent. As part of this enhancement, I expanded the application by implementing a user authentication system and integrating MongoDB Atlas for persistent data storage. This included adding user registration and login functionality, allowing users to create accounts and return to the application with consistent identities.
+I improved the overall software design by separating responsibilities within the application. The server now handles API routes for authentication separately from real-time Socket.IO communication, while the client distinguishes between spectator and authenticated player states. These changes improve the maintainability and scalability of the application and reflect more professional software engineering practices.
+Enhancing this artifact helped me better understand the difference between a functional prototype and a more complete, production-style application, which has always been an issue for me. Initially, the project focused on demonstrating real-time communication, but adding authentication and database integration required me to think more carefully about application structure, data flow, and user management.
+Overall, this enhancement moved OpenRealm closer to a professionally structured full-stack application and provided valuable experience in software design, system integration, and secure application development.
+</p>
         <!-- END ENHANCEMENT 1 -->
 
         <div class="outcomes">
@@ -344,7 +364,16 @@
         </div>
 
         <!-- PASTE ENHANCEMENT 2 NARRATIVE BELOW -->
-        <p>[PASTE MILESTONE 3 NARRATIVE HERE — copy from milestone 3.docx]</p>
+        <p>Enhancement Two: Algorithms and Data Structure
+The artifact selected for this enhancement is OpenRealm, a real-time multiplayer web application built with Node.js, Express, Socket.IO, and MongoDB Atlas. The project was originally created as a prototype to explore client-server communication and real-time interactions between players in a shared environment.
+I selected this artifact because it provides a strong example of how algorithms and data structures directly impact performance and user experience. In a real-time system, inefficient logic quickly becomes noticeable, making it an ideal project for demonstrating improvement.
+For this milestone, I enhanced the project by implementing point-and-click movement, improving the player tracking system, adding a sortable player list, and introducing basic server-side bots. The most significant improvement was replacing the original WASD movement with a point-and-click system using vector normalization. By calculating the distance between the player and a target position and normalizing the direction vector, the player now moves at a consistent speed regardless of direction. This prevents diagonal movement from being faster than horizontal or vertical movement and creates smoother, more accurate motion.
+The player registry uses a hash map (JavaScript object) keyed by socket ID, allowing for O(1) average-case lookup, insertion, and deletion. This is important because player updates occur frequently, and iterating through an array for each update would not scale well. When displaying the player list, the data is converted into an array using Object.entries() and sorted using a comparator function, which runs in O(n log n) time. This approach balances efficient real-time updates with flexible UI presentation.
+These enhancements demonstrate the ability to design and evaluate computing solutions using algorithmic principles. Choosing a hash map over an array, implementing vector normalization for movement, and handling sorting as a derived operation all reflect deliberate design decisions based on performance and scalability.
+During this process, I learned how small implementation details can significantly affect system behavior. For example, my initial movement logic caused diagonal speed inconsistencies, which led me to better understand vector math and normalization. I also encountered challenges managing bot behavior, particularly ensuring that background processes were properly cleaned up, which reinforced the importance of resource management in real-time systems.
+Overall, this milestone helped me move beyond simply writing functional code and toward making intentional design decisions based on efficiency, scalability, and system behavior.
+
+</p>
         <!-- END ENHANCEMENT 2 -->
 
         <div class="outcomes">
@@ -373,41 +402,15 @@
 
         <h3>Artifact Description</h3>
         <p>
-            OpenRealm is a real-time multiplayer browser game built with Node.js, Express, Socket.IO,
-            and MongoDB Atlas, created in early 2025. Players share a live canvas, move freely, and
-            communicate through a chat system with text effects and admin controls.
-        </p>
+            The artifact selected for this enhancement is OpenRealm, a real-time multiplayer web application built with Node.js, Express, Socket.IO, and MongoDB Atlas. The project was originally created as a prototype to explore client-server communication and real-time interactions between players in a shared environment.
+I selected this artifact because it provides a strong example of how databases support real-time applications and persistent user data. In a multiplayer environment, maintaining consistent user information across sessions is important for both functionality and user experience, making this project a good fit for demonstrating database improvements.
+For this milestone, I enhanced the project by implementing persistent avatar customization. Players can now select a custom avatar color, which is saved to the database and restored whenever they log back in. This required updating the user schema to include avatar data, modifying server-side logic to store updates in MongoDB, and ensuring that the data is retrieved and applied when a player reconnects.
+The database operations use MongoDB with Mongoose, allowing structured user data to be stored and accessed efficiently. When a player updates their avatar, the server validates the input and performs an update operation in the database. When the player joins the game, their stored avatar data is retrieved and applied to their in-game representation. This ensures consistency between sessions and prevents reliance on client-side data.
+These enhancements demonstrate the ability to design and implement database-driven features within a real-time application. The system supports persistent user data, integrates database operations into live gameplay, and ensures that updates are reflected immediately across connected clients.
+During this process, I learned how important it is to coordinate between the client, server, and database layers. One challenge was making sure that avatar changes were both saved correctly and updated in real time for other players. This required handling both database updates and live event broadcasting. I also had to ensure proper validation to prevent invalid data from being stored.
+Overall, this milestone helped me better understand how databases are used in real-world applications, especially in systems that require both real-time interaction and persistent data storage. It reinforced the importance of designing systems that are both responsive and reliable.
 
-        <h3>Justification</h3>
-        <p>
-            I selected OpenRealm because the database drives real application behavior rather than just
-            storing static records. This milestone added two enhancements: a persistent moderation system
-            that saves timed mute and freeze durations to MongoDB so players cannot escape punishment by
-            re-logging, and avatar color customization that is saved per user and restored on every login.
-            Both features required meaningful schema decisions, asynchronous database operations, and
-            server-side input validation.
-        </p>
 
-        <h3>Course Outcomes</h3>
-        <p>
-            The enhancement primarily addresses Outcome Four through practical database design — choosing
-            the right data representation, handling async reads and writes without blocking gameplay, and
-            building features that persist meaningfully across sessions. Outcome Five is addressed through
-            server-side validation of all incoming data and closing the re-login exploit in the moderation
-            system. Outcome Three is touched on through the timer math required to pause and resume
-            countdowns between sessions.
-        </p>
-
-        <h3>Reflection</h3>
-        <p>
-            The most valuable lesson came from the moderation timer design. Storing an absolute expiry
-            timestamp seemed obvious at first, but it would allow players to shorten their punishment by
-            logging out. Switching to remaining milliseconds — written back to the database on disconnect
-            and restored on reconnect — required rethinking both the schema and the disconnect handler.
-            That process of recognizing a design flaw and correcting it at the data model level was the
-            most genuine database engineering in this milestone. The avatar feature reinforced the
-            importance of deciding what state needs to be persisted versus what can be computed, and when
-            to broadcast updates to keep all clients consistent.
         </p>
 
         <div class="outcomes">
