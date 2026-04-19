@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TheYock | CS 499 ePortfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:       #0f0f0f;
+            --surface:  #1a1a1a;
+            --border:   #2a2a2a;
+            --accent:   #4caf50;
+            --accent2:  #2196f3;
+            --accent3:  #ff9800;
+            --text:     #e0e0e0;
+            --muted:    #888;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.7;
+        }
+
+        /* ── Nav ── */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15,15,15,0.95);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+        }
+
+        nav .logo {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--accent);
+            letter-spacing: 1px;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 8px;
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        nav a:hover {
+            color: var(--text);
+            background: var(--surface);
+        }
+
+        /* ── Sections ── */
+        section {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 80px 24px;
+        }
+
+        section + section {
+            border-top: 1px solid var(--border);
+        }
+
+        .section-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.2; margin-bottom: 16px; }
+        h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 16px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 8px; color: var(--accent); }
+
+        p { margin-bottom: 16px; color: #ccc; }
+
+        .hero-sub {
+            font-size: 1.15rem;
+            color: var(--muted);
+            margin-bottom: 32px;
+        }
+
+        /* ── Badges ── */
+        .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border: 1px solid;
+        }
+
+        .badge-green  { color: var(--accent);  border-color: var(--accent);  background: rgba(76,175,80,0.08); }
+        .badge-blue   { color: var(--accent2);  border-color: var(--accent2); background: rgba(33,150,243,0.08); }
+        .badge-orange { color: var(--accent3);  border-color: var(--accent3); background: rgba(255,152,0,0.08); }
+
+        /* ── Video embed ── */
+        .video-wrap {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            margin: 24px 0;
+        }
+
+        .video-wrap iframe {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            border: none;
+        }
+
+        /* ── Enhancement cards ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin: 24px 0;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .card-num {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+        }
+
+        .num-green  { background: rgba(76,175,80,0.15);  color: var(--accent); }
+        .num-blue   { background: rgba(33,150,243,0.15); color: var(--accent2); }
+        .num-orange { background: rgba(255,152,0,0.15);  color: var(--accent3); }
+
+        /* ── Outcomes list ── */
+        .outcomes {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-top: 20px;
+        }
+
+        .outcomes p {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin: 0 0 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .outcomes ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .outcomes li {
+            font-size: 0.8rem;
+            color: #bbb;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 4px;
+        }
+
+        /* ── Code link button ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 0.2s;
+            margin-right: 10px;
+            margin-top: 8px;
+        }
+
+        .btn:hover { opacity: 0.8; }
+        .btn-green  { background: var(--accent);  color: #000; }
+        .btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+        /* ── Footer ── */
+        footer {
+            text-align: center;
+            padding: 40px 24px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            nav ul { display: none; }
+            h1 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+    <span class="logo">TheYock</span>
+    <ul>
+        <li><a href="#about">About</a></li>
+        <li><a href="#review">Code Review</a></li>
+        <li><a href="#e1">Enhancement 1</a></li>
+        <li><a href="#e2">Enhancement 2</a></li>
+        <li><a href="#e3">Enhancement 3</a></li>
+        <li><a href="#project">Project</a></li>
+    </ul>
+</nav>
+
+<!-- Hero / Self-Assessment -->
+<section id="about">
+    <div class="section-label" style="color: var(--accent)">CS 499 Capstone — ePortfolio</div>
+    <h1>Professional<br>Self-Assessment</h1>
+    <p class="hero-sub">Bachelor of Science in Computer Science — SNHU</p>
+
+    <div class="badges">
+        <span class="badge badge-green">Full-Stack Development</span>
+        <span class="badge badge-blue">Real-Time Systems</span>
+        <span class="badge badge-orange">Database Engineering</span>
+        <span class="badge badge-green">Secure Coding</span>
+        <span class="badge badge-blue">Algorithms & Data Structures</span>
+    </div>
+
+    <!-- PASTE YOUR SELF-ASSESSMENT TEXT BELOW, REPLACING THIS BLOCK -->
+    <p>
+        [PASTE SELF-ASSESSMENT HERE — copy the text from Self-assessment.docx]
+    </p>
+    <!-- END SELF-ASSESSMENT -->
+
+    <h3>How the Artifacts Fit Together</h3>
+    <p>
+        All three enhancements in this ePortfolio are built on the same artifact — OpenRealm, a real-time
+        multiplayer browser game. Using a single project across all three categories demonstrates how software
+        engineering decisions, algorithmic thinking, and database design all interact in a real application.
+        Each enhancement builds on the last: the software design milestone established the architecture,
+        the algorithms milestone refined the systems running on top of it, and the database milestone
+        added the persistence layer that makes those systems durable across sessions.
+    </p>
+</section>
+
+<!-- Code Review -->
+<section id="review">
+    <div class="section-label" style="color: var(--accent2)">Milestone One</div>
+    <h2>Code Review</h2>
+    <p>
+        A walkthrough of the existing OpenRealm codebase before enhancements, covering existing functionality,
+        areas for improvement in structure, security, and efficiency, and the planned enhancements for each
+        of the three categories.
+    </p>
+
+    <div class="video-wrap">
+        <iframe
+            src="https://www.youtube.com/embed/JGkQ0PjLgHw"
+            title="CS 499 Code Review — OpenRealm"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen>
+        </iframe>
+    </div>
+</section>
+
+<!-- Enhancement 1 -->
+<section id="e1">
+    <div class="section-label" style="color: var(--accent)">Enhancement One</div>
+    <h2>Software Design &amp; Engineering</h2>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-num num-green">1</div>
+            <div>
+                <strong>OpenRealm — Full-Stack Architecture</strong><br>
+                <span style="color:var(--muted); font-size:0.85rem">Node.js · Express · Socket.IO · JWT · bcrypt</span>
+            </div>
+        </div>
+
+        <!-- PASTE ENHANCEMENT 1 NARRATIVE BELOW -->
+        <p>[PASTE MILESTONE 2 NARRATIVE HERE — copy from Milestone 2.docx]</p>
+        <!-- END ENHANCEMENT 1 -->
+
+        <div class="outcomes">
+            <p>Course Outcomes Addressed</p>
+            <ul>
+                <li>Outcome 2 — Professional Communications</li>
+                <li>Outcome 4 — Software Engineering &amp; Design</li>
+                <li>Outcome 5 — Security Mindset</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- Enhancement 2 -->
+<section id="e2">
+    <div class="section-label" style="color: var(--accent2)">Enhancement Two</div>
+    <h2>Algorithms &amp; Data Structures</h2>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-num num-blue">2</div>
+            <div>
+                <strong>OpenRealm — Game Systems &amp; Algorithmic Design</strong><br>
+                <span style="color:var(--muted); font-size:0.85rem">Hash Maps · Sorting · Vector Math · Game Loop</span>
+            </div>
+        </div>
+
+        <!-- PASTE ENHANCEMENT 2 NARRATIVE BELOW -->
+        <p>[PASTE MILESTONE 3 NARRATIVE HERE — copy from milestone 3.docx]</p>
+        <!-- END ENHANCEMENT 2 -->
+
+        <div class="outcomes">
+            <p>Course Outcomes Addressed</p>
+            <ul>
+                <li>Outcome 3 — Algorithmic Principles</li>
+                <li>Outcome 4 — Software Engineering</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- Enhancement 3 -->
+<section id="e3">
+    <div class="section-label" style="color: var(--accent3)">Enhancement Three</div>
+    <h2>Databases</h2>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-num num-orange">3</div>
+            <div>
+                <strong>OpenRealm — MongoDB Persistence Layer</strong><br>
+                <span style="color:var(--muted); font-size:0.85rem">MongoDB Atlas · Mongoose · Persistent State · Avatar Customization</span>
+            </div>
+        </div>
+
+        <h3>Artifact Description</h3>
+        <p>
+            OpenRealm is a real-time multiplayer browser game built with Node.js, Express, Socket.IO,
+            and MongoDB Atlas, created in early 2025. Players share a live canvas, move freely, and
+            communicate through a chat system with text effects and admin controls.
+        </p>
+
+        <h3>Justification</h3>
+        <p>
+            I selected OpenRealm because the database drives real application behavior rather than just
+            storing static records. This milestone added two enhancements: a persistent moderation system
+            that saves timed mute and freeze durations to MongoDB so players cannot escape punishment by
+            re-logging, and avatar color customization that is saved per user and restored on every login.
+            Both features required meaningful schema decisions, asynchronous database operations, and
+            server-side input validation.
+        </p>
+
+        <h3>Course Outcomes</h3>
+        <p>
+            The enhancement primarily addresses Outcome Four through practical database design — choosing
+            the right data representation, handling async reads and writes without blocking gameplay, and
+            building features that persist meaningfully across sessions. Outcome Five is addressed through
+            server-side validation of all incoming data and closing the re-login exploit in the moderation
+            system. Outcome Three is touched on through the timer math required to pause and resume
+            countdowns between sessions.
+        </p>
+
+        <h3>Reflection</h3>
+        <p>
+            The most valuable lesson came from the moderation timer design. Storing an absolute expiry
+            timestamp seemed obvious at first, but it would allow players to shorten their punishment by
+            logging out. Switching to remaining milliseconds — written back to the database on disconnect
+            and restored on reconnect — required rethinking both the schema and the disconnect handler.
+            That process of recognizing a design flaw and correcting it at the data model level was the
+            most genuine database engineering in this milestone. The avatar feature reinforced the
+            importance of deciding what state needs to be persisted versus what can be computed, and when
+            to broadcast updates to keep all clients consistent.
+        </p>
+
+        <div class="outcomes">
+            <p>Course Outcomes Addressed</p>
+            <ul>
+                <li>Outcome 3 — Algorithmic Principles</li>
+                <li>Outcome 4 — Database Engineering</li>
+                <li>Outcome 5 — Security Mindset</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- Project Links -->
+<section id="project">
+    <div class="section-label" style="color: var(--accent)">The Artifact</div>
+    <h2>OpenRealm</h2>
+    <p>
+        A real-time multiplayer browser game demonstrating full-stack development, live socket communication,
+        persistent data storage, and a secure admin system. All three enhancements were applied to this
+        single artifact across software design, algorithms, and databases.
+    </p>
+
+    <a class="btn btn-green" href="https://github.com/TheYock/Project-OpenRealm" target="_blank">
+        View on GitHub
+    </a>
+    <a class="btn btn-ghost" href="https://github.com/TheYock/Project-OpenRealm/tree/main/public" target="_blank">
+        Browse Source Code
+    </a>
+
+    <div class="card" style="margin-top: 32px;">
+        <h3 style="margin-top:0">Tech Stack</h3>
+        <div class="badges">
+            <span class="badge badge-green">Node.js</span>
+            <span class="badge badge-green">Express</span>
+            <span class="badge badge-blue">Socket.IO</span>
+            <span class="badge badge-blue">MongoDB Atlas</span>
+            <span class="badge badge-blue">Mongoose</span>
+            <span class="badge badge-orange">JWT</span>
+            <span class="badge badge-orange">bcrypt</span>
+            <span class="badge badge-green">HTML5 Canvas</span>
+            <span class="badge badge-green">Railway</span>
+        </div>
+    </div>
+</section>
+
+<footer>
+    CS 499 Capstone ePortfolio &nbsp;·&nbsp; Southern New Hampshire University &nbsp;·&nbsp; 2025
+</footer>
+
+</body>
+</html>
