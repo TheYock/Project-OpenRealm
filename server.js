@@ -461,6 +461,7 @@ io.on("connection", (socket) => {
             );
             if (!botEntry) return;
             const [botId, bot] = botEntry;
+            if (bot.muted) return;
             const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)];
             setTimeout(() => {
                 if (!players[botId]) return;
