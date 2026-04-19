@@ -89,6 +89,12 @@ let lastEmittedY = player.y;
 // calculated by offsetting from the click so the player centers on it.
 let moveTarget = null;
 
+// Local-only click ripples — never sent to server.
+// Each entry: { x, y, startTime } drawn as an expanding circle.
+const clickRipples = [];
+const RIPPLE_DURATION = 500; // ms
+const RIPPLE_MAX_RADIUS = 18;
+
 canvas.addEventListener("click", (e) => {
     // Only allow movement for logged-in players.
     if (!playerName) return;
@@ -101,6 +107,9 @@ canvas.addEventListener("click", (e) => {
         x: e.offsetX - player.size / 2,
         y: e.offsetY - player.size / 2
     };
+
+    // Spawn a ripple at the exact click point.
+    clickRipples.push({ x: e.offsetX, y: e.offsetY, startTime: performance.now() });
 });
 
 // --- Duration Picker ---
@@ -408,6 +417,13 @@ window.joinGame = function(username, token) {
     updatePlayerList();
 };
 
+// --- Event: "joinConfirmed" ---
+// Server sends back the verified admin status after the join event is processed.
+// This overrides the client-side JWT decode so the two stay in sync.
+socket.on("joinConfirmed", (data) => {
+    isAdmin = data.isAdmin || false;
+});
+
 // --- Event: "currentPlayers" ---
 // Sent by the server to the newly joined player only.
 // Contains a snapshot of every player currently in the game,
@@ -503,7 +519,7 @@ socket.on("forcedDisconnect", (reason) => {
 // We add it to the chat log and update the sender's chat bubble.
 socket.on("chatMessage", (data) => {
     // Append the message to the scrollable chat panel.
-    addChatMessage(`${data.name}: ${data.message}`);
+    addChatMessage(data.name, data.message);
 
     // Update the chat bubble above that player's head (if they're in our dictionary).
     // System messages don't have an id, so players[undefined] will just be falsy.
@@ -726,15 +742,35 @@ document.addEventListener("click", () => {
 });
 
 // Creates a new div for a message and appends it to the chat panel.
-// textContent is used (not innerHTML) to prevent XSS — any HTML in
-// the message is treated as plain text rather than executed.
-function addChatMessage(message) {
+// Builds DOM nodes manually (never innerHTML) to prevent XSS.
+// @mentions are wrapped in <span class="mentionTag">; if the local
+// player is mentioned, the whole row gets the .chatMention class.
+function addChatMessage(name, message) {
     const messageDiv = document.createElement("div");
     messageDiv.className = "chatMessage";
-    messageDiv.textContent = message;
-    chatMessages.appendChild(messageDiv);
 
-    // Auto-scroll to the bottom so the latest message is always visible.
+    // Prepend "Name: " as plain text.
+    messageDiv.appendChild(document.createTextNode(`${name}: `));
+
+    // Split message on @tokens, alternating plain text and mention spans.
+    const parts = message.split(/(@\S+)/g);
+    let isMentioned = false;
+    parts.forEach(part => {
+        if (/^@\S+$/.test(part)) {
+            const token = part.slice(1).toLowerCase();
+            if (playerName && token === playerName.toLowerCase()) isMentioned = true;
+            const span = document.createElement("span");
+            span.className = "mentionTag";
+            span.textContent = part;
+            messageDiv.appendChild(span);
+        } else {
+            messageDiv.appendChild(document.createTextNode(part));
+        }
+    });
+
+    if (isMentioned) messageDiv.classList.add("chatMention");
+
+    chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
@@ -1074,6 +1110,21 @@ function draw() {
     // Wipe the entire canvas before redrawing — without this, movement
     // would leave a trail of squares across the screen.
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw local click ripples (purely cosmetic, never synced to server).
+    const now = performance.now();
+    for (let i = clickRipples.length - 1; i >= 0; i--) {
+        const r = clickRipples[i];
+        const t = (now - r.startTime) / RIPPLE_DURATION; // 0 → 1
+        if (t >= 1) { clickRipples.splice(i, 1); continue; }
+        const radius = t * RIPPLE_MAX_RADIUS;
+        const alpha  = 1 - t;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
 
     // Loop over every player in our dictionary and draw them.
     for (let id in players) {

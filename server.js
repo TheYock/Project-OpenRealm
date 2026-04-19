@@ -288,7 +288,7 @@ io.on("connection", (socket) => {
                 const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
                 isAdmin = decoded.isAdmin || false;
             } catch (e) {
-                // Invalid or expired token — treat as non-admin and continue.
+                console.warn("JWT verify failed:", e.message);
             }
         }
         socket.data.isAdmin = isAdmin;
@@ -338,6 +338,11 @@ io.on("connection", (socket) => {
         } catch (e) {
             console.error("join DB restore error:", e.message);
         }
+
+        // Confirm verified admin status back to the joining client.
+        // The client also decodes isAdmin from the JWT payload, but that
+        // doesn't validate the signature. This event is the ground truth.
+        socket.emit("joinConfirmed", { isAdmin });
 
         // Send the full current player list back to THIS player only.
         // socket.emit() targets only the sender — the new player needs to
@@ -437,6 +442,37 @@ io.on("connection", (socket) => {
             name,
             message,
             timestamp: Date.now()
+        });
+
+        // --- Bot @mention replies ---
+        // If the message contains @BotName matching a live bot, the bot
+        // replies with a random message after a short natural-feeling delay.
+        const BOT_REPLIES = [
+            "Hi!", "Hello there!", "Hey!", "Greetings!",
+            "Oh, you talking to me?", "Beep boop.", "...",
+            "What do you want?", "I'm just a bot!",
+            "👋", "Leave me alone, I'm wandering."
+        ];
+
+        const mentions = [...message.matchAll(/@(\S+)/g)].map(m => m[1].toLowerCase());
+        mentions.forEach(mentioned => {
+            const botEntry = Object.entries(players).find(
+                ([, p]) => p.isBot && p.name.toLowerCase() === mentioned
+            );
+            if (!botEntry) return;
+            const [botId, bot] = botEntry;
+            const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)];
+            setTimeout(() => {
+                if (!players[botId]) return;
+                players[botId].chatBubble    = reply;
+                players[botId].chatTimestamp = Date.now();
+                io.emit("chatMessage", {
+                    id:        botId,
+                    name:      bot.name,
+                    message:   reply,
+                    timestamp: Date.now()
+                });
+            }, 800 + Math.random() * 1000);
         });
     });
 

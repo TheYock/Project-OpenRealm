@@ -70,7 +70,7 @@ router.post("/register", async (req, res) => {
         const token = jwt.sign(
             { id: user._id, username: user.username, isAdmin: user.isAdmin },
             process.env.JWT_SECRET,
-            { expiresIn: "7d" }
+            { expiresIn: "30d" }
         );
 
         // Return the token and basic user info to the client.
@@ -126,7 +126,7 @@ router.post("/login", async (req, res) => {
         const token = jwt.sign(
             { id: user._id, username: user.username, isAdmin: user.isAdmin },
             process.env.JWT_SECRET,
-            { expiresIn: "7d" }
+            { expiresIn: "30d" }
         );
 
         res.json({

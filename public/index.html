@@ -304,6 +304,19 @@
                 word-wrap: break-word;       /* Wrap long words/URLs so they don't overflow the panel */
             }
 
+            /* Highlighted @mention tag inside a chat message */
+            .mentionTag {
+                color: #ffc107;
+                font-weight: 600;
+            }
+
+            /* Row highlight when the local player is @mentioned */
+            .chatMention {
+                background: rgba(255, 193, 7, 0.12);
+                border-left: 3px solid #ffc107;
+                padding-left: 4px;
+            }
+
             /* ============================================================
                Auth Overlay
                The overlay sits on top of everything while the player is
@@ -985,7 +998,7 @@
         <!-- ============================================================
              Help Modal
              Opened by the ? button in the chat bar. Explains chat
-             effects, colours, and controls. Add new sections here as
+             effects, colors, and controls. Add new sections here as
              features are added.
              ============================================================ -->
         <div id="helpOverlay">
@@ -1016,7 +1029,7 @@
                 </div>
 
                 <div class="helpSection">
-                    <h3>Chat Colours</h3>
+                    <h3>Chat Colors</h3>
                     <p>Add a colour prefix before your message or effect:</p>
                     <div class="colourGrid">
                         <span style="color:#cc0000">red:</span>
