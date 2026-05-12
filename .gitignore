@@ -3,3 +3,6 @@
 
 # Dependencies — reinstalled via npm install
 node_modules/
+
+# Local Codex browser smoke-test artifacts
+.codex-playtest/

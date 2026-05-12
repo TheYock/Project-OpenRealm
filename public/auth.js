@@ -23,6 +23,13 @@ const formLogin     = document.getElementById("formLogin");
 const formRegister  = document.getElementById("formRegister");
 const errorLogin    = document.getElementById("errorLogin");
 const errorRegister = document.getElementById("errorRegister");
+const emailOverlay  = document.getElementById("emailOverlay");
+const emailCaptureForm = document.getElementById("emailCaptureForm");
+const emailCaptureInput = document.getElementById("emailCaptureInput");
+const emailCaptureError = document.getElementById("emailCaptureError");
+const emailVerificationBanner = document.getElementById("emailVerificationBanner");
+const resendVerificationButton = document.getElementById("resendVerificationButton");
+const emailVerificationMessage = document.getElementById("emailVerificationMessage");
 
 // ============================================================
 // Auto-Login Check
@@ -97,7 +104,7 @@ tabRegister.addEventListener("click", () => {
 // Called on successful login or register.
 // Saves the session and hands off to game.js.
 // ============================================================
-function enterGame(token, username) {
+function enterGame(token, username, user = {}, options = {}) {
     // Persist the session so next visit auto-logs in.
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USERNAME_KEY, username);
@@ -115,7 +122,43 @@ function enterGame(token, username) {
     // Tell game.js to join — passes the token so it can be sent to the
     // server on the "join" event for admin verification.
     window.joinGame(username, token);
+
+    if (user.requiresEmail) {
+        window.showEmailCapture("Add a valid email to continue.");
+    } else if (user.requiresEmailVerification) {
+        const message = options.verificationSent
+            ? "Verification link sent. Check the server console in local dev."
+            : "Verify your email or use Resend for a fresh link.";
+        window.showEmailVerificationPrompt(message);
+    } else {
+        window.hideEmailVerificationPrompt();
+    }
 }
+
+window.showEmailCapture = function(message = "") {
+    overlay.style.display = "none";
+    emailOverlay.style.display = "flex";
+    emailCaptureError.textContent = message;
+    emailCaptureInput.focus();
+};
+
+function setEmailVerificationMessage(message, isError = false) {
+    if (!emailVerificationMessage) return;
+    emailVerificationMessage.textContent = message || "";
+    emailVerificationMessage.classList.toggle("error", isError);
+}
+
+window.showEmailVerificationPrompt = function(message = "") {
+    if (!emailVerificationBanner) return;
+    emailVerificationBanner.style.display = "flex";
+    setEmailVerificationMessage(message);
+};
+
+window.hideEmailVerificationPrompt = function() {
+    if (!emailVerificationBanner) return;
+    emailVerificationBanner.style.display = "none";
+    setEmailVerificationMessage("");
+};
 
 // ============================================================
 // showPlayerBar(username)
@@ -148,11 +191,11 @@ function showPlayerBar(username) {
 // It returns a Promise, so we use async/await to write it in a
 // linear, readable style instead of callback nesting.
 // ============================================================
-async function postJSON(url, body) {
+async function postJSON(url, body, extraHeaders = {}) {
     const response = await fetch(url, {
         method: "POST",
         // Tell the server we're sending JSON
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...extraHeaders },
         // JSON.stringify() converts our JS object into a JSON string
         body: JSON.stringify(body)
     });
@@ -165,6 +208,38 @@ async function postJSON(url, body) {
     return { ok: response.ok, data };
 }
 
+if (resendVerificationButton) {
+    resendVerificationButton.addEventListener("click", async () => {
+        const token = localStorage.getItem(TOKEN_KEY);
+        if (!token) {
+            setEmailVerificationMessage("Please log in again.", true);
+            return;
+        }
+
+        resendVerificationButton.disabled = true;
+        resendVerificationButton.textContent = "Sending...";
+        setEmailVerificationMessage("");
+
+        const { ok, data } = await postJSON(
+            "/api/resend-verification",
+            {},
+            { Authorization: `Bearer ${token}` }
+        );
+
+        if (ok) {
+            setEmailVerificationMessage(data.message || "Verification link sent.");
+            if (data.user && !data.user.requiresEmailVerification) {
+                window.hideEmailVerificationPrompt();
+            }
+        } else {
+            setEmailVerificationMessage(data.error || "Unable to resend verification link.", true);
+        }
+
+        resendVerificationButton.disabled = false;
+        resendVerificationButton.textContent = "Resend";
+    });
+}
+
 // ============================================================
 // Login Form Submission
 // ============================================================
@@ -173,7 +248,7 @@ formLogin.addEventListener("submit", async (e) => {
     e.preventDefault();
     errorLogin.textContent = "";
 
-    const username = document.getElementById("loginUsername").value.trim();
+    const identifier = document.getElementById("loginUsername").value.trim();
     const password = document.getElementById("loginPassword").value;
 
     // Disable the button while the request is in flight so the
@@ -182,10 +257,12 @@ formLogin.addEventListener("submit", async (e) => {
     btn.disabled    = true;
     btn.textContent = "Logging in...";
 
-    const { ok, data } = await postJSON("/api/login", { username, password });
+    const { ok, data } = await postJSON("/api/login", { identifier, password });
 
     if (ok) {
-        enterGame(data.token, data.user.username);
+        enterGame(data.token, data.user.username, data.user, {
+            verificationSent: !!data.verificationSent
+        });
     } else {
         // Show the error message returned by the server
         errorLogin.textContent = data.error || "Login failed";
@@ -202,6 +279,7 @@ formRegister.addEventListener("submit", async (e) => {
     errorRegister.textContent = "";
 
     const username  = document.getElementById("regUsername").value.trim();
+    const email     = document.getElementById("regEmail").value.trim();
     const password  = document.getElementById("regPassword").value;
     const password2 = document.getElementById("regPassword2").value;
 
@@ -215,13 +293,54 @@ formRegister.addEventListener("submit", async (e) => {
     btn.disabled    = true;
     btn.textContent = "Creating account...";
 
-    const { ok, data } = await postJSON("/api/register", { username, password });
+    const { ok, data } = await postJSON("/api/register", { username, email, password });
 
     if (ok) {
-        enterGame(data.token, data.user.username);
+        enterGame(data.token, data.user.username, data.user, {
+            verificationSent: !!data.verificationSent
+        });
     } else {
         errorRegister.textContent = data.error || "Registration failed";
         btn.disabled    = false;
         btn.textContent = "Create Account";
+    }
+});
+
+emailCaptureForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    emailCaptureError.textContent = "";
+
+    const email = emailCaptureInput.value.trim();
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+        emailCaptureError.textContent = "Please log in again.";
+        return;
+    }
+
+    const btn = emailCaptureForm.querySelector("button");
+    btn.disabled = true;
+    btn.textContent = "Saving...";
+
+    const { ok, data } = await postJSON(
+        "/api/account/email",
+        { email },
+        { Authorization: `Bearer ${token}` }
+    );
+
+    if (ok) {
+        localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem(USERNAME_KEY, data.user.username);
+        emailOverlay.style.display = "none";
+        if (data.user.requiresEmailVerification) {
+            window.showEmailVerificationPrompt("Verification link sent. Check the server console in local dev.");
+        } else {
+            window.hideEmailVerificationPrompt();
+        }
+        btn.disabled = false;
+        btn.textContent = "Save Email";
+    } else {
+        emailCaptureError.textContent = data.error || "Unable to save email";
+        btn.disabled = false;
+        btn.textContent = "Save Email";
     }
 });

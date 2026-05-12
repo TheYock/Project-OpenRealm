@@ -10,6 +10,7 @@
 
         <!-- Sets the text shown on the browser tab. -->
         <title>OpenRealm</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
 
         <style>
             /* ============================================================
@@ -19,6 +20,10 @@
                inside the curly braces define how they appear.
                ============================================================ */
 
+            * {
+                box-sizing: border-box;
+            }
+
             /* --- Page Body --- */
             body {
                 margin: 0;                   /* Remove the default white gap around the page edge */
@@ -26,6 +31,413 @@
                 color: white;                /* Default text color for anything on the page */
                 font-family: Arial, sans-serif;
                 text-align: center;          /* Center the h1 heading */
+            }
+
+            h1 {
+                margin: 20px 12px;
+                font-size: 2rem;
+            }
+
+            #worldShell {
+                width: min(1480px, calc(100% - 24px));
+                margin: 0 auto;
+                display: grid;
+                grid-template-columns: 260px minmax(0, 1140px);
+                gap: 16px;
+                align-items: start;
+            }
+
+            #realmMain {
+                min-width: 0;
+            }
+
+            #channelSidebar {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                min-height: 600px;
+                padding: 12px;
+                border: 1px solid #333;
+                background: #151515;
+                text-align: left;
+            }
+
+            #channelSidebarHeader {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                gap: 10px;
+            }
+
+            #channelSidebarHeader h2 {
+                margin: 0;
+                color: #eee;
+                font-size: 0.92rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            #sidebarCurrentChannelName {
+                color: #4caf50;
+                font-size: 0.78rem;
+                white-space: nowrap;
+            }
+
+            #channelCreateForm {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) 40px;
+                gap: 6px;
+            }
+
+            #channelJoinCodeForm,
+            #roomCreateForm {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 6px;
+            }
+
+            #channelCreateInput,
+            #channelBrowserSearch,
+            #channelCodeInput,
+            #roomCreateInput,
+            #roomModeSelect,
+            #roomCreateDescription {
+                min-width: 0;
+                padding: 8px 9px;
+                border: 1px solid #444;
+                border-radius: 4px;
+                background: #101010;
+                color: white;
+                outline: none;
+            }
+
+            #channelCreateInput:focus,
+            #channelBrowserSearch:focus,
+            #channelCodeInput:focus,
+            #roomCreateInput:focus,
+            #roomModeSelect:focus,
+            #roomCreateDescription:focus {
+                border-color: #4caf50;
+            }
+
+            #roomCreateDescription {
+                grid-column: 1 / -1;
+                min-height: 58px;
+                resize: vertical;
+                font: inherit;
+                line-height: 1.35;
+            }
+
+            #roomModeSelect {
+                grid-column: 1 / -1;
+            }
+
+            #channelCreateButton,
+            #channelJoinCodeButton,
+            #channelDeleteButton,
+            #roomCreateButton,
+            #roomCloseButton {
+                padding: 8px 10px;
+                border: none;
+                border-radius: 4px;
+                background: #4caf50;
+                color: white;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+            #roomCloseButton {
+                display: none;
+                width: 100%;
+                background: #d32f2f;
+            }
+
+            #channelDeleteButton {
+                display: none;
+                width: 100%;
+                background: #d32f2f;
+            }
+
+            #channelCreateButton:disabled,
+            #channelJoinCodeButton:disabled,
+            #channelDeleteButton:disabled,
+            #roomCreateButton:disabled,
+            #roomCloseButton:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+
+            #channelPrivateLabel {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                color: #aaa;
+                font-size: 0.78rem;
+            }
+
+            #channelCodeDisplay {
+                min-height: 1rem;
+                margin: 0;
+                color: #ffc107;
+                font-family: monospace;
+                font-size: 0.78rem;
+            }
+
+            #channelError,
+            #roomError {
+                min-height: 1rem;
+                margin: 0;
+                color: #e57373;
+                font-size: 0.78rem;
+            }
+
+            .channelSection h3 {
+                margin: 8px 0 7px;
+                color: #777;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .channelList {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            #channelBrowserSearch {
+                width: 100%;
+                margin-bottom: 7px;
+            }
+
+            #channelTools {
+                display: none;
+            }
+
+            .channelEmpty {
+                margin: 0;
+                color: #666;
+                font-size: 0.78rem;
+            }
+
+            .channelItem {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 6px;
+                align-items: stretch;
+            }
+
+            .channelSelect,
+            .channelFavorite {
+                border: 1px solid #333;
+                border-radius: 6px;
+                background: #202020;
+                color: #ddd;
+                cursor: pointer;
+            }
+
+            .channelSelect {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                column-gap: 7px;
+                min-width: 0;
+                padding: 8px 9px;
+                text-align: left;
+            }
+
+            .channelSelect::before {
+                content: "+";
+                grid-row: 1 / span 2;
+                align-self: center;
+                width: 10px;
+                color: #777;
+                font-weight: bold;
+                text-align: center;
+            }
+
+            .channelItem.expanded .channelSelect::before {
+                content: "-";
+            }
+
+            .channelItem.current .channelSelect {
+                border-color: #4caf50;
+                color: #4caf50;
+            }
+
+            .channelItem.selected .channelSelect {
+                background: #242a24;
+            }
+
+            .channelName {
+                display: block;
+                grid-column: 2;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-weight: bold;
+            }
+
+            .channelMeta {
+                display: block;
+                grid-column: 2;
+                margin-top: 3px;
+                color: #888;
+                font-size: 0.72rem;
+                font-weight: normal;
+            }
+
+            .channelFavorite {
+                width: 58px;
+                padding: 0 7px;
+                color: #aaa;
+                font-size: 0.72rem;
+            }
+
+            .channelFavorite.saved {
+                border-color: #4caf50;
+                color: #4caf50;
+            }
+
+            .channelEmptyAction {
+                width: fit-content;
+                padding: 4px 9px;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-size: 0.76rem;
+            }
+
+            .channelEmptyAction:hover:not(:disabled) {
+                background: #2f6f32;
+                color: white;
+            }
+
+            .channelSelect:disabled,
+            .channelFavorite:disabled,
+            .channelEmptyAction:disabled,
+            .roomJoinButton:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+
+            .channelRooms {
+                display: none;
+                grid-column: 1 / -1;
+                margin: 1px 0 6px 10px;
+                padding-left: 9px;
+                border-left: 1px solid #333;
+            }
+
+            .channelItem.expanded .channelRooms {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .roomRow {
+                width: 100%;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 6px;
+                align-items: center;
+                padding: 5px 6px;
+                border: 1px solid transparent;
+                border-radius: 4px;
+                background: transparent;
+            }
+
+            .roomRow.current {
+                border-color: #4caf50;
+                background: #1f2b20;
+            }
+
+            .roomLabel {
+                display: block;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                color: #ccc;
+                font-size: 0.86rem;
+            }
+
+            .roomRow.current .roomLabel {
+                color: #4caf50;
+            }
+
+            .roomInfoButton {
+                min-width: 0;
+                padding: 0;
+                border: none;
+                background: transparent;
+                color: inherit;
+                text-align: left;
+                cursor: pointer;
+            }
+
+            .roomInfoButton:hover .roomLabel,
+            .roomInfoButton:focus-visible .roomLabel {
+                text-decoration: underline;
+                text-underline-offset: 2px;
+            }
+
+            .roomDetails {
+                padding: 9px 10px 10px;
+                border: 1px solid #333;
+                border-radius: 4px;
+                background: #181818;
+                color: #bbb;
+                font-size: 0.78rem;
+                text-align: left;
+            }
+
+            .roomDetails h4 {
+                margin: 0 0 5px;
+                color: #4caf50;
+                font-size: 0.88rem;
+            }
+
+            .roomDetails p {
+                margin: 0 0 7px;
+                line-height: 1.35;
+            }
+
+            .roomDetailsMeta {
+                color: #888;
+                font-size: 0.72rem;
+            }
+
+            .roomJoinButton {
+                min-width: 48px;
+                padding: 4px 8px;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                background: transparent;
+                color: #4caf50;
+                text-align: center;
+                cursor: pointer;
+                font-size: 0.76rem;
+            }
+
+            .roomJoinButton:hover:not(:disabled) {
+                background: #2f6f32;
+                color: white;
+            }
+
+            .roomJoinButton:disabled {
+                color: #4caf50;
+            }
+
+            .roomCount {
+                color: #777;
+                font-size: 0.72rem;
+            }
+
+            #roomTools {
+                display: flex;
+                flex-direction: column;
+                gap: 7px;
             }
 
             /* --- Game Container --- */
@@ -38,7 +450,8 @@
                 justify-content: center;     /* Center the children horizontally on the page */
                 align-items: flex-start;     /* Align children to the top (not stretched to equal height) */
                 gap: 20px;                   /* Add 20px of space between the canvas and chat panel */
-                margin-top: 20px;            /* Push everything down from the heading */
+                width: 100%;
+                margin: 20px 0 0;            /* Push everything down from the room bar */
             }
 
             /* --- Canvas --- */
@@ -51,6 +464,13 @@
                 border: 2px solid white;
             }
 
+            #gameCanvas {
+                width: min(800px, 100%);
+                height: auto;
+                aspect-ratio: 4 / 3;
+                flex: 0 1 auto;
+            }
+
             /* --- Chat Panel --- */
             /* The chat panel is a fixed-size column that sits alongside
                the canvas. It also uses Flexbox internally to stack the
@@ -58,6 +478,7 @@
             #chatContainer {
                 width: 300px;
                 height: 600px;               /* Match the canvas height so they line up */
+                max-width: 100%;
                 display: flex;
                 flex-direction: column;      /* Stack children top-to-bottom */
                 border: 2px solid white;
@@ -93,6 +514,206 @@
                 outline: none;               /* Remove the blue focus ring browsers add by default */
                 background: #1a1a1a;
                 color: white;
+            }
+
+            /* ============================================================
+               Location Bar
+               Shows the current channel and room without crowding controls.
+               ============================================================ */
+            #roomBar {
+                width: 100%;
+                margin: 0;
+                padding: 12px 14px;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 18px;
+                background: #181818;
+                border: 1px solid #333;
+            }
+
+            .locationItem {
+                display: flex;
+                align-items: baseline;
+                gap: 8px;
+                text-align: left;
+                flex-wrap: wrap;
+            }
+
+            .locationItem span {
+                color: #777;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            #currentChannelName,
+            #currentRoomName {
+                color: #4caf50;
+                font-size: 0.95rem;
+                white-space: nowrap;
+            }
+
+            #channelHome {
+                margin: 0 0 12px;
+                padding: 14px;
+                border: 1px solid #333;
+                background: #181818;
+                text-align: left;
+            }
+
+            .channelHomeHeader {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 14px;
+                align-items: start;
+            }
+
+            .channelHomeTitle span {
+                display: block;
+                margin-bottom: 4px;
+                color: #888;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .channelHomeTitle h2 {
+                margin: 0;
+                color: #4caf50;
+                font-size: 1.25rem;
+            }
+
+            .channelHomeTitle p {
+                margin: 6px 0 0;
+                color: #bbb;
+                line-height: 1.35;
+                font-size: 0.88rem;
+            }
+
+            .channelHomeActions {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 7px;
+            }
+
+            .channelHomeAction,
+            .channelHomeRoom button {
+                padding: 7px 10px;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 0.78rem;
+            }
+
+            .channelHomeAction.primary {
+                background: #4caf50;
+                color: white;
+            }
+
+            .channelHomeAction.danger {
+                border-color: #d32f2f;
+                color: #ff8a80;
+            }
+
+            .channelHomeAction:hover:not(:disabled),
+            .channelHomeRoom button:hover:not(:disabled) {
+                background: #2f6f32;
+                color: white;
+            }
+
+            .channelHomeAction.danger:hover:not(:disabled) {
+                background: #d32f2f;
+                color: white;
+            }
+
+            .channelHomeAction:disabled,
+            .channelHomeRoom button:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+
+            .channelHomeStats {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 7px;
+                margin-top: 12px;
+            }
+
+            .channelHomeStats span {
+                padding: 4px 7px;
+                border: 1px solid #333;
+                border-radius: 4px;
+                background: #202020;
+                color: #aaa;
+                font-size: 0.74rem;
+            }
+
+            .channelHomeRooms {
+                margin-top: 13px;
+                display: grid;
+                gap: 7px;
+            }
+
+            .channelHomeRoomsHeader {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 10px;
+            }
+
+            .channelHomeRoomsHeader h3 {
+                margin: 0;
+                color: #eee;
+                font-size: 0.86rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .channelHomeRoomsHeader span,
+            .channelHomeEmpty {
+                margin: 0;
+                color: #777;
+                font-size: 0.78rem;
+            }
+
+            .channelHomeRoom {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+                align-items: center;
+                padding: 8px 9px;
+                border: 1px solid #333;
+                border-radius: 4px;
+                background: #151515;
+            }
+
+            .channelHomeRoom.current {
+                border-color: #4caf50;
+                background: #1f2b20;
+            }
+
+            .channelHomeRoomInfo {
+                min-width: 0;
+                display: grid;
+                gap: 3px;
+            }
+
+            .channelHomeRoomInfo strong {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                color: #eee;
+                font-size: 0.88rem;
+            }
+
+            .channelHomeRoomInfo span {
+                color: #888;
+                font-size: 0.74rem;
             }
 
             /* ============================================================
@@ -325,7 +946,8 @@
                even if the user has scrolled. 'inset: 0' is shorthand
                for top/right/bottom/left all set to 0.
                ============================================================ */
-            #authOverlay {
+            #authOverlay,
+            #emailOverlay {
                 display: none;               /* Hidden by default — auth.js shows it if needed */
                 position: fixed;
                 inset: 0;                    /* Cover the entire viewport */
@@ -398,7 +1020,8 @@
 
             /* authCard needs position: relative so #authClose can anchor to it */
             /* The white card in the centre of the overlay */
-            #authCard {
+            #authCard,
+            #emailCard {
                 position: relative;
                 background: #1e1e1e;
                 border: 1px solid #333;
@@ -409,7 +1032,8 @@
             }
 
             /* Game title inside the card */
-            #authCard h2 {
+            #authCard h2,
+            #emailCard h2 {
                 margin: 0 0 8px;
                 font-size: 1.8rem;
                 color: #4caf50;             /* Green accent matching the game theme */
@@ -417,7 +1041,8 @@
             }
 
             /* Subtitle under the title */
-            #authCard p.subtitle {
+            #authCard p.subtitle,
+            #emailCard p.subtitle {
                 margin: 0 0 28px;
                 color: #888;
                 font-size: 0.85rem;
@@ -717,6 +1342,49 @@
                 font-weight: bold;
             }
 
+            #emailVerificationBanner {
+                display: none;
+                align-items: center;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 9px 14px;
+                background: #231f14;
+                border-bottom: 1px solid #5a4a1d;
+                color: #f2d17a;
+                font-size: 0.86rem;
+            }
+
+            #emailVerificationBanner button {
+                padding: 5px 12px;
+                border: 1px solid #f2d17a;
+                border-radius: 5px;
+                background: transparent;
+                color: #f2d17a;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+            #emailVerificationBanner button:hover:not(:disabled) {
+                background: #4caf50;
+                border-color: #4caf50;
+                color: white;
+            }
+
+            #emailVerificationBanner button:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+
+            #emailVerificationMessage {
+                color: #aaa;
+                min-height: 1em;
+            }
+
+            #emailVerificationMessage.error {
+                color: #e57373;
+            }
+
             #logoutButton {
                 padding: 6px 16px;
                 background: transparent;
@@ -821,6 +1489,98 @@
                 background: #2b2b2b;
             }
 
+            @media (max-width: 900px) {
+                body {
+                    overflow-x: hidden;
+                }
+
+                h1 {
+                    font-size: 1.55rem;
+                    margin: 18px 12px;
+                }
+
+                #spectatorBanner,
+                #playerBar,
+                #emailVerificationBanner {
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    padding: 10px 12px;
+                }
+
+                #spectatorBanner span {
+                    font-size: 0.9rem;
+                }
+
+                #worldShell {
+                    width: min(100% - 16px, 800px);
+                    grid-template-columns: 1fr;
+                    gap: 14px;
+                }
+
+                #channelSidebar {
+                    min-height: 0;
+                }
+
+                #channelCreateForm {
+                    grid-template-columns: minmax(0, 1fr) 44px;
+                }
+
+                #gameContainer {
+                    flex-direction: column;
+                    align-items: center;
+                    width: 100%;
+                    gap: 14px;
+                    margin-top: 14px;
+                }
+
+                #roomBar {
+                    width: 100%;
+                    align-items: stretch;
+                    flex-direction: column;
+                }
+
+                .channelHomeHeader,
+                .channelHomeRoom {
+                    grid-template-columns: 1fr;
+                }
+
+                .channelHomeActions,
+                .channelHomeRoomsHeader {
+                    justify-content: flex-start;
+                }
+
+                .channelHomeAction,
+                .channelHomeRoom button {
+                    width: 100%;
+                }
+
+                #roomCreateForm,
+                #channelJoinCodeForm {
+                    width: 100%;
+                }
+
+                #roomCreateInput,
+                #roomModeSelect,
+                #roomCreateDescription,
+                #channelCodeInput {
+                    width: 100%;
+                    flex: 1;
+                }
+
+                #chatContainer {
+                    width: 100%;
+                    height: min(360px, 48vh);
+                    min-height: 280px;
+                }
+
+                #authCard,
+                #emailCard,
+                #helpCard,
+                #profileCard {
+                    width: min(92vw, 480px);
+                }
+            }
+
         </style>
     </head>
     <body>
@@ -861,6 +1621,12 @@
             </div>
         </div>
 
+        <div id="emailVerificationBanner">
+            <span>Verify your email to finish securing your account.</span>
+            <button type="button" id="resendVerificationButton">Resend</button>
+            <span id="emailVerificationMessage"></span>
+        </div>
+
         <!-- ============================================================
              Spectator Banner
              Visible to unauthenticated visitors. Clicking the button
@@ -894,8 +1660,8 @@
                 <!-- Login Form — shown by default -->
                 <form class="authForm" id="formLogin" style="display: flex;">
                     <label>
-                        Username
-                        <input type="text"     id="loginUsername" autocomplete="username"     required maxlength="20" />
+                        Username or Email
+                        <input type="text"     id="loginUsername" autocomplete="username"     required maxlength="254" />
                     </label>
                     <label>
                         Password
@@ -912,6 +1678,10 @@
                         <input type="text"     id="regUsername"  autocomplete="username"     required maxlength="20" />
                     </label>
                     <label>
+                        Email
+                        <input type="email"    id="regEmail"     autocomplete="email"        required maxlength="254" />
+                    </label>
+                    <label>
                         Password
                         <input type="password" id="regPassword"  autocomplete="new-password" required />
                     </label>
@@ -926,7 +1696,88 @@
             </div>
         </div>
 
+        <div id="emailOverlay">
+            <div id="emailCard">
+                <h2>Add Email</h2>
+                <p class="subtitle">Add a valid email to finish securing your account.</p>
+                <form class="authForm" id="emailCaptureForm" style="display: flex;">
+                    <label>
+                        Email
+                        <input type="email" id="emailCaptureInput" autocomplete="email" required maxlength="254" />
+                    </label>
+                    <p class="authError" id="emailCaptureError"></p>
+                    <button type="submit">Save Email</button>
+                </form>
+            </div>
+        </div>
+
         <h1>Welcome to OpenRealm!</h1>
+
+        <div id="worldShell">
+            <aside id="channelSidebar">
+                <div id="channelSidebarHeader">
+                    <h2>Channels</h2>
+                    <span id="sidebarCurrentChannelName">OpenRealm</span>
+                </div>
+                <form id="channelCreateForm">
+                    <input type="text" id="channelCreateInput" maxlength="32" placeholder="New channel" />
+                    <button type="submit" id="channelCreateButton" title="Create channel">+</button>
+                </form>
+                <label id="channelPrivateLabel">
+                    <input type="checkbox" id="channelPrivateToggle" />
+                    Private channel
+                </label>
+                <form id="channelJoinCodeForm">
+                    <input type="text" id="channelCodeInput" maxlength="12" placeholder="Channel code" />
+                    <button type="submit" id="channelJoinCodeButton">Join</button>
+                </form>
+                <p id="channelCodeDisplay"></p>
+                <p id="channelError"></p>
+                <section class="channelSection">
+                    <h3>Favorites</h3>
+                    <div class="channelList" id="favoriteChannelList"></div>
+                </section>
+                <section class="channelSection">
+                    <h3>Channel Browser</h3>
+                    <input type="search" id="channelBrowserSearch" maxlength="64" placeholder="Search public channels" />
+                    <div class="channelList" id="publicChannelList"></div>
+                </section>
+                <section class="channelSection" id="channelTools">
+                    <h3>Channel Tools</h3>
+                    <button type="button" id="channelDeleteButton">Delete Channel</button>
+                </section>
+                <section class="channelSection" id="roomTools">
+                    <h3>Room Tools</h3>
+                    <form id="roomCreateForm">
+                        <input type="text" id="roomCreateInput" maxlength="32" placeholder="New room" />
+                        <button type="submit" id="roomCreateButton">Create</button>
+                        <select id="roomModeSelect" title="Room mode">
+                            <option value="social">Social room</option>
+                            <option value="watch">Watch room</option>
+                            <option value="game">Game room</option>
+                            <option value="custom">Custom room</option>
+                        </select>
+                        <textarea id="roomCreateDescription" maxlength="240" rows="3" placeholder="Room description (optional)"></textarea>
+                    </form>
+                    <button type="button" id="roomCloseButton">Close Current Room</button>
+                    <p id="roomError"></p>
+                </section>
+            </aside>
+
+            <main id="realmMain">
+
+        <section id="channelHome" aria-live="polite"></section>
+
+        <div id="roomBar">
+            <div class="locationItem">
+                <span>Channel</span>
+                <strong id="currentChannelName">OpenRealm</strong>
+            </div>
+            <div class="locationItem">
+                <span>Room</span>
+                <strong id="currentRoomName">Town Square</strong>
+            </div>
+        </div>
 
         <!-- ============================================================
              Page Layout
@@ -982,6 +1833,9 @@
                     <button id="sendButton">Send</button>
                 </div>
             </div>
+        </div>
+
+            </main>
         </div>
 
         <!-- ============================================================

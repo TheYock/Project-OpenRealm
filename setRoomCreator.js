@@ -1,13 +1,15 @@
 // ============================================================
-// makeAdmin.js — Console Script
+// setRoomCreator.js - Console Script
 // ============================================================
-// Grants admin privileges to a user account in MongoDB.
+// Grants or revokes room creation privileges without giving a user
+// full admin powers.
 //
 // Usage:
-//   node makeAdmin.js <username>
+//   node setRoomCreator.js <username> <on|off>
 //
-// Example:
-//   node makeAdmin.js YOCK
+// Examples:
+//   node setRoomCreator.js YOCK on
+//   node setRoomCreator.js YOCK off
 // ============================================================
 
 require("dotenv").config();
@@ -15,24 +17,28 @@ const mongoose = require("mongoose");
 const User = require("./models/User");
 
 const username = process.argv[2];
+const mode = (process.argv[3] || "").toLowerCase();
 
-if (!username) {
-    console.log("Usage: node makeAdmin.js <username>");
+if (!username || !["on", "off", "true", "false"].includes(mode)) {
+    console.log("Usage: node setRoomCreator.js <username> <on|off>");
     process.exit(1);
 }
+
+const canCreateRooms = mode === "on" || mode === "true";
 
 mongoose.connect(process.env.MONGODB_URI)
     .then(async () => {
         const user = await User.findOneAndUpdate(
             { username },
-            { isAdmin: true, canCreateRooms: true },
-            { returnDocument: "after" }  // Return the updated document so we can confirm the change
+            { canCreateRooms },
+            { returnDocument: "after" }
         );
 
         if (!user) {
             console.log(`User "${username}" not found.`);
         } else {
-            console.log(`✓ "${user.username}" is now an admin.`);
+            const status = user.canCreateRooms ? "can now create rooms" : "can no longer create rooms";
+            console.log(`OK: "${user.username}" ${status}.`);
         }
 
         mongoose.disconnect();

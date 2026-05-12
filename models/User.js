@@ -22,6 +22,36 @@ const userSchema = new mongoose.Schema({
         maxlength: 20
     },
 
+    // Email is required for new accounts. Existing pre-email accounts may
+    // temporarily have this field missing until they complete the email prompt.
+    email: {
+        type: String,
+        unique: true,
+        sparse: true,
+        trim: true,
+        lowercase: true,
+        maxlength: 254,
+        index: true
+    },
+
+    // Email verification is optional for old accounts until they add an
+    // email, then required to finish securing the account.
+    emailVerified: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+
+    emailVerificationTokenHash: {
+        type: String,
+        default: null
+    },
+
+    emailVerificationExpiresAt: {
+        type: Date,
+        default: null
+    },
+
     // We never store the plain-text password — only the bcrypt hash.
     // The actual hashing happens in the auth route before saving.
     password: {
@@ -34,6 +64,19 @@ const userSchema = new mongoose.Schema({
     isAdmin: {
         type: Boolean,
         default: false
+    },
+
+    // Whether this user can create rooms. Admins can always create rooms,
+    // but this lets us grant room creation without full admin powers.
+    canCreateRooms: {
+        type: Boolean,
+        default: false
+    },
+
+    // Channel IDs the user saved in the sidebar for quick access.
+    favoriteChannels: {
+        type: [String],
+        default: []
     },
 
     // Remaining milliseconds of active mute/freeze as of last logout.
