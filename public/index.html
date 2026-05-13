@@ -1285,6 +1285,18 @@
                 color: white;
             }
 
+            #canvasContextMenu button:disabled,
+            #contextMenu button:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            #canvasContextMenu button:disabled:hover,
+            #contextMenu button:disabled:hover {
+                background: none;
+                color: #ccc;
+            }
+
             /* ============================================================
                Status Badges (player list)
                Shown next to a player's name when they are muted or frozen.
@@ -1413,6 +1425,342 @@
                 position: relative;
             }
 
+            .barButton {
+                padding: 6px 12px;
+                background: #242424;
+                border: 1px solid #444;
+                border-radius: 6px;
+                color: #ccc;
+                font-size: 0.82rem;
+                cursor: pointer;
+                transition: border-color 0.2s, color 0.2s, background 0.2s;
+            }
+
+            .barButton:hover {
+                background: #2d2d2d;
+                border-color: #4caf50;
+                color: white;
+            }
+
+            .barButton.hasUnread {
+                border-color: #f2d17a;
+                color: #f2d17a;
+            }
+
+            #socialDrawer {
+                display: none;
+                position: fixed;
+                top: 54px;
+                right: 18px;
+                bottom: 18px;
+                z-index: 2500;
+                width: min(380px, calc(100vw - 24px));
+                background: #171717;
+                border: 1px solid #383838;
+                border-radius: 8px;
+                box-shadow: 0 22px 60px rgba(0, 0, 0, 0.65);
+                overflow: hidden;
+                text-align: left;
+            }
+
+            #socialDrawer.open {
+                display: flex;
+                flex-direction: column;
+            }
+
+            #socialDrawerHeader {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                padding: 14px 16px;
+                border-bottom: 1px solid #303030;
+            }
+
+            #socialDrawerHeader span {
+                display: block;
+                color: #888;
+                font-size: 0.7rem;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+            }
+
+            #socialDrawerHeader strong {
+                display: block;
+                margin-top: 2px;
+                color: #4caf50;
+                font-size: 1rem;
+            }
+
+            #socialCloseButton {
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.2rem;
+                cursor: pointer;
+            }
+
+            #socialCloseButton:hover {
+                color: white;
+            }
+
+            #socialTabs {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                border-bottom: 1px solid #303030;
+            }
+
+            .socialTab {
+                padding: 11px;
+                border: none;
+                border-bottom: 2px solid transparent;
+                background: #1e1e1e;
+                color: #888;
+                cursor: pointer;
+            }
+
+            .socialTab.active {
+                color: #4caf50;
+                border-bottom-color: #4caf50;
+            }
+
+            #socialNotice {
+                min-height: 18px;
+                margin: 10px 16px 0;
+                color: #aaa;
+                font-size: 0.8rem;
+            }
+
+            #socialNotice.error {
+                color: #e57373;
+            }
+
+            .socialPanel {
+                display: none;
+                flex: 1;
+                min-height: 0;
+                padding: 12px 16px 16px;
+                overflow-y: auto;
+            }
+
+            .socialPanel.active {
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+            }
+
+            .socialSectionTitle {
+                margin: 0 0 8px;
+                color: #888;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .socialEmpty {
+                margin: 0;
+                color: #777;
+                font-size: 0.83rem;
+            }
+
+            .socialList {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .socialFriend {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 10px;
+                align-items: center;
+                padding: 9px;
+                border: 1px solid #303030;
+                border-radius: 6px;
+                background: #1d1d1d;
+            }
+
+            .socialFriendMain {
+                min-width: 0;
+            }
+
+            .socialFriendName {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-width: 0;
+                color: #eee;
+                font-weight: bold;
+            }
+
+            .socialFriendName span:last-child {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .presenceDot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #666;
+                flex-shrink: 0;
+            }
+
+            .presenceDot.online {
+                background: #4caf50;
+            }
+
+            .socialFriendMeta {
+                margin-top: 4px;
+                color: #999;
+                font-size: 0.78rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .socialFriendActions {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 6px;
+            }
+
+            .socialFriendActions button,
+            #dmForm button {
+                padding: 6px 10px;
+                border: 1px solid #4caf50;
+                border-radius: 5px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-size: 0.78rem;
+            }
+
+            .socialFriendActions button:hover:not(:disabled),
+            #dmForm button:hover:not(:disabled) {
+                background: #4caf50;
+                color: white;
+            }
+
+            .socialFriendActions button.danger {
+                border-color: #e57373;
+                color: #e57373;
+            }
+
+            .socialFriendActions button.danger:hover:not(:disabled) {
+                background: #e57373;
+                color: white;
+            }
+
+            .socialFriendActions button:disabled,
+            #dmForm button:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
+            }
+
+            #dmPanel.active {
+                gap: 12px;
+            }
+
+            #dmFriendList {
+                display: flex;
+                gap: 8px;
+                overflow-x: auto;
+                padding-bottom: 4px;
+                flex-shrink: 0;
+            }
+
+            .dmFriendButton {
+                flex: 0 0 auto;
+                max-width: 150px;
+                padding: 7px 10px;
+                border: 1px solid #333;
+                border-radius: 6px;
+                background: #1f1f1f;
+                color: #ccc;
+                cursor: pointer;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .dmFriendButton.active {
+                border-color: #4caf50;
+                color: #4caf50;
+            }
+
+            .dmFriendButton.hasUnread {
+                border-color: #f2d17a;
+                color: #f2d17a;
+            }
+
+            #dmConversation {
+                display: flex;
+                flex: 1;
+                min-height: 0;
+                flex-direction: column;
+                border: 1px solid #303030;
+                border-radius: 6px;
+                background: #151515;
+            }
+
+            #dmHeader {
+                padding: 10px 12px;
+                border-bottom: 1px solid #303030;
+                color: #4caf50;
+                font-weight: bold;
+            }
+
+            #dmMessages {
+                flex: 1;
+                min-height: 160px;
+                overflow-y: auto;
+                padding: 10px 12px;
+            }
+
+            .dmMessage {
+                margin-bottom: 9px;
+                color: #ccc;
+                font-size: 0.84rem;
+                word-break: break-word;
+            }
+
+            .dmMessage.own {
+                color: #f1f1f1;
+            }
+
+            .dmMessage strong {
+                color: #4caf50;
+            }
+
+            .dmMessage.own strong {
+                color: #f2d17a;
+            }
+
+            #dmForm {
+                display: flex;
+                gap: 8px;
+                padding: 10px;
+                border-top: 1px solid #303030;
+            }
+
+            #dmInput {
+                flex: 1;
+                min-width: 0;
+                padding: 9px 10px;
+                background: #101010;
+                border: 1px solid #333;
+                border-radius: 5px;
+                color: white;
+            }
+
+            #dmInput:focus {
+                outline: none;
+                border-color: #4caf50;
+            }
+
             #avatarColorBtn {
                 width: 28px;
                 height: 28px;
@@ -1507,6 +1855,20 @@
                     padding: 10px 12px;
                 }
 
+                #socialDrawer {
+                    top: 72px;
+                    right: 8px;
+                    bottom: 8px;
+                }
+
+                .socialFriend {
+                    grid-template-columns: 1fr;
+                }
+
+                .socialFriendActions {
+                    justify-content: flex-start;
+                }
+
                 #spectatorBanner span {
                     font-size: 0.9rem;
                 }
@@ -1593,6 +1955,8 @@
         <div id="playerBar">
             <span>Welcome, <span class="player-name" id="playerBarName"></span>!</span>
             <div class="bar-right">
+                <button type="button" class="barButton" id="friendsButton">Friends</button>
+                <button type="button" class="barButton" id="messagesButton">DMs</button>
                 <button id="avatarColorBtn" title="Customize avatar color"></button>
                 <div id="avatarPanel">
                     <p>Avatar Color</p>
@@ -1620,6 +1984,42 @@
                 <button id="logoutButton">Log Out</button>
             </div>
         </div>
+
+        <aside id="socialDrawer" aria-hidden="true">
+            <div id="socialDrawerHeader">
+                <div>
+                    <span>Social</span>
+                    <strong id="socialDrawerTitle">Friends</strong>
+                </div>
+                <button type="button" id="socialCloseButton" title="Close">x</button>
+            </div>
+            <div id="socialTabs">
+                <button type="button" class="socialTab active" id="friendsTabButton">Friends</button>
+                <button type="button" class="socialTab" id="messagesTabButton">Messages</button>
+            </div>
+            <p id="socialNotice"></p>
+            <section id="friendsPanel" class="socialPanel active">
+                <div>
+                    <h3 class="socialSectionTitle">Pending</h3>
+                    <div class="socialList" id="pendingFriendsList"></div>
+                </div>
+                <div>
+                    <h3 class="socialSectionTitle">Friends</h3>
+                    <div class="socialList" id="acceptedFriendsList"></div>
+                </div>
+            </section>
+            <section id="dmPanel" class="socialPanel">
+                <div id="dmFriendList"></div>
+                <div id="dmConversation">
+                    <div id="dmHeader">Private Messages</div>
+                    <div id="dmMessages"></div>
+                    <form id="dmForm">
+                        <input type="text" id="dmInput" maxlength="500" placeholder="Message a friend..." />
+                        <button type="submit" id="dmSendButton">Send</button>
+                    </form>
+                </div>
+            </section>
+        </aside>
 
         <div id="emailVerificationBanner">
             <span>Verify your email to finish securing your account.</span>
@@ -1908,6 +2308,9 @@
              Hidden by default. game.js positions and shows it on right-click of a player entry. -->
         <div id="contextMenu">
             <div class="contextTitle" id="contextPlayerName"></div>
+            <button id="ctxListMessage">Message</button>
+            <button id="ctxListAddFriend">Add Friend</button>
+            <div class="contextDivider" id="ctxListSocialDivider"></div>
             <div class="contextAdminLabel" id="ctxListAdminLabel">Admin</div>
             <button id="ctxMute">Mute</button>
             <button id="ctxFreeze">Freeze</button>
@@ -1924,6 +2327,8 @@
             <button id="ctxCanvasMute">Mute</button>
             <button id="ctxCanvasFreeze">Freeze</button>
             <div class="contextDivider" id="ctxDivider"></div>
+            <button id="ctxCanvasMessage">Message</button>
+            <button id="ctxCanvasAddFriend">Add Friend</button>
             <button id="ctxViewProfile">View Profile</button>
         </div>
 

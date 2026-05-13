@@ -1,6 +1,6 @@
 # OpenRealm
 
-Version: `0.2.1`
+Version: `0.2.2`
 
 OpenRealm is a browser-based multiplayer social game where players can log in, enter live rooms, chat, customize their avatar color, and move around a shared 2D canvas world.
 
@@ -21,6 +21,8 @@ The project is moving toward a Discord-like social structure: public channels co
 - Channel membership and channel-scoped roles
 - Expandable channel navigation with selectable rooms inside each channel
 - Public and private channels with shareable channel codes
+- Friends list with pending requests, online presence, and join-friend shortcuts
+- Private one-to-one messages between accepted friends
 - Owner-only channel deletion with automatic room cleanup
 - Optional room descriptions with expandable room info panels
 - Room modes for social, watch, game, and custom room concepts
@@ -63,6 +65,14 @@ OpenRealm now uses a `channel -> room` structure.
 - Channel owners can delete their own non-default channels, which removes all rooms in that channel and moves active players back to Town Square.
 
 The default channel is `OpenRealm`, and the default room is `Town Square`.
+
+## Friends And Private Messages
+
+Logged-in players can right-click another real player in the online list or on the canvas to send a friend request. Incoming requests appear in the top-bar Friends drawer, where they can be accepted or declined.
+
+Accepted friends show whether they are online and where they are playing. Public channels and joined private channels show the channel and room name with a Join action. If a friend is inside a private channel the viewer has not joined, the location is shown as `Private Channel` and Join is disabled.
+
+The Messages tab opens one-to-one private chats with accepted friends. Direct messages are saved in MongoDB and the latest conversation history loads when a friend chat is opened.
 
 ## Permissions
 
@@ -127,10 +137,20 @@ models/User.js         User accounts, permissions, favorites, avatar data
 models/Channel.js      Public channel containers
 models/ChannelMember.js Channel membership, roles, and membership status
 models/Room.js         Joinable rooms inside channels
+models/Friendship.js   Friend requests and accepted friend relationships
+models/DirectMessage.js Private one-to-one chat messages
 routes/auth.js         Register/login API routes
 makeAdmin.js           Grants admin and creation privileges
 setRoomCreator.js      Grants/revokes creation privileges only
 ```
+
+## Version 0.2.2 Notes
+
+- Added friends, pending friend requests, friend presence, and join-friend shortcuts.
+- Added private direct messages between accepted friends.
+- Private friend locations now hide channel/room names unless the viewer has channel access.
+- Added top-bar Friends and DMs drawers.
+- Added right-click Add Friend and Message actions for real players.
 
 ## Version 0.2.1 Notes
 

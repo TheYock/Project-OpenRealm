@@ -72,6 +72,24 @@ const roomCreateDescription = document.getElementById("roomCreateDescription");
 const roomCreateButton = document.getElementById("roomCreateButton");
 const roomCloseButton = document.getElementById("roomCloseButton");
 const roomError = document.getElementById("roomError");
+const friendsButton = document.getElementById("friendsButton");
+const messagesButton = document.getElementById("messagesButton");
+const socialDrawer = document.getElementById("socialDrawer");
+const socialDrawerTitle = document.getElementById("socialDrawerTitle");
+const socialCloseButton = document.getElementById("socialCloseButton");
+const friendsTabButton = document.getElementById("friendsTabButton");
+const messagesTabButton = document.getElementById("messagesTabButton");
+const socialNotice = document.getElementById("socialNotice");
+const friendsPanel = document.getElementById("friendsPanel");
+const dmPanel = document.getElementById("dmPanel");
+const pendingFriendsList = document.getElementById("pendingFriendsList");
+const acceptedFriendsList = document.getElementById("acceptedFriendsList");
+const dmFriendList = document.getElementById("dmFriendList");
+const dmHeader = document.getElementById("dmHeader");
+const dmMessages = document.getElementById("dmMessages");
+const dmForm = document.getElementById("dmForm");
+const dmInput = document.getElementById("dmInput");
+const dmSendButton = document.getElementById("dmSendButton");
 
 let channels = [];
 let rooms = [];
@@ -86,6 +104,11 @@ const expandedChannelIds = new Set(["openrealm"]);
 let expandedRoomInfoId = null;
 let selectedHomeChannelId = "openrealm";
 let channelBrowserQuery = "";
+let friends = [];
+let socialTab = "friends";
+let activeDmFriendId = null;
+const directMessageThreads = {};
+const unreadDirectMessages = {};
 
 function canModerateCurrentChannel() {
     return isAdmin || !!currentChannel?.canModerate;
@@ -119,6 +142,249 @@ function setChannelError(message) {
     channelError.textContent = message || "";
 }
 
+function setSocialNotice(message, isError = false) {
+    socialNotice.textContent = message || "";
+    socialNotice.classList.toggle("error", !!isError);
+}
+
+function acceptedFriends() {
+    return friends.filter(friend => friend.status === "accepted");
+}
+
+function pendingFriends() {
+    return friends.filter(friend => friend.status === "pending");
+}
+
+function friendByUserId(userId) {
+    return friends.find(friend => friend.userId === userId) || null;
+}
+
+function friendByUsername(username) {
+    const normalized = String(username || "").toLowerCase();
+    return friends.find(friend => String(friend.username || "").toLowerCase() === normalized) || null;
+}
+
+function unreadTotal() {
+    return Object.values(unreadDirectMessages).reduce((total, count) => total + (Number(count) || 0), 0);
+}
+
+function updateSocialButtons() {
+    const loggedIn = !!playerName && hasJoinedGame;
+    friendsButton.disabled = !loggedIn;
+    messagesButton.disabled = !loggedIn;
+    const unread = unreadTotal();
+    messagesButton.textContent = unread ? `DMs (${unread})` : "DMs";
+    messagesButton.classList.toggle("hasUnread", unread > 0);
+}
+
+function setSocialTab(tab) {
+    socialTab = tab === "messages" ? "messages" : "friends";
+    socialDrawerTitle.textContent = socialTab === "messages" ? "Messages" : "Friends";
+    friendsTabButton.classList.toggle("active", socialTab === "friends");
+    messagesTabButton.classList.toggle("active", socialTab === "messages");
+    friendsPanel.classList.toggle("active", socialTab === "friends");
+    dmPanel.classList.toggle("active", socialTab === "messages");
+}
+
+function openSocialDrawer(tab = "friends", friendUserId = null) {
+    if (!playerName) return;
+    setSocialTab(tab);
+    socialDrawer.classList.add("open");
+    socialDrawer.setAttribute("aria-hidden", "false");
+    if (friendUserId) {
+        selectDirectFriend(friendUserId);
+    } else {
+        renderSocialDrawer();
+    }
+}
+
+function closeSocialDrawer() {
+    socialDrawer.classList.remove("open");
+    socialDrawer.setAttribute("aria-hidden", "true");
+}
+
+function makeSocialEmpty(text) {
+    const empty = document.createElement("p");
+    empty.className = "socialEmpty";
+    empty.textContent = text;
+    return empty;
+}
+
+function makeSmallButton(label, onClick, { className = "", disabled = false } = {}) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.className = className;
+    button.disabled = disabled;
+    button.addEventListener("click", onClick);
+    return button;
+}
+
+function renderFriendRow(friend) {
+    const row = document.createElement("div");
+    row.className = "socialFriend";
+
+    const main = document.createElement("div");
+    main.className = "socialFriendMain";
+
+    const name = document.createElement("div");
+    name.className = "socialFriendName";
+
+    const dot = document.createElement("span");
+    dot.className = "presenceDot" + (friend.online ? " online" : "");
+
+    const nameText = document.createElement("span");
+    nameText.textContent = friend.username;
+
+    const meta = document.createElement("div");
+    meta.className = "socialFriendMeta";
+    meta.textContent = friend.locationLabel || (friend.online ? "Online" : "Offline");
+
+    name.appendChild(dot);
+    name.appendChild(nameText);
+    main.appendChild(name);
+    main.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "socialFriendActions";
+
+    if (friend.status === "pending") {
+        if (friend.direction === "incoming") {
+            actions.appendChild(makeSmallButton("Accept", () => {
+                socket.emit("respondFriendRequest", { friendshipId: friend.friendshipId, action: "accept" });
+            }));
+            actions.appendChild(makeSmallButton("Decline", () => {
+                socket.emit("respondFriendRequest", { friendshipId: friend.friendshipId, action: "decline" });
+            }, { className: "danger" }));
+        } else {
+            actions.appendChild(makeSmallButton("Pending", () => {}, { disabled: true }));
+            actions.appendChild(makeSmallButton("Cancel", () => {
+                socket.emit("removeFriend", { friendshipId: friend.friendshipId });
+            }, { className: "danger" }));
+        }
+    } else {
+        actions.appendChild(makeSmallButton("Join", () => {
+            socket.emit("joinFriend", { friendUserId: friend.userId });
+        }, { disabled: !friend.canJoin }));
+        actions.appendChild(makeSmallButton("Message", () => {
+            openSocialDrawer("messages", friend.userId);
+        }));
+        actions.appendChild(makeSmallButton("Remove", () => {
+            if (confirm(`Remove ${friend.username} from your friends?`)) {
+                socket.emit("removeFriend", { friendshipId: friend.friendshipId });
+            }
+        }, { className: "danger" }));
+    }
+
+    row.appendChild(main);
+    row.appendChild(actions);
+    return row;
+}
+
+function renderFriendsPanel() {
+    pendingFriendsList.replaceChildren();
+    acceptedFriendsList.replaceChildren();
+
+    const pending = pendingFriends();
+    if (!pending.length) {
+        pendingFriendsList.appendChild(makeSocialEmpty("No pending requests."));
+    } else {
+        pending.forEach(friend => pendingFriendsList.appendChild(renderFriendRow(friend)));
+    }
+
+    const accepted = acceptedFriends().sort((a, b) => {
+        if (a.online !== b.online) return a.online ? -1 : 1;
+        return a.username.localeCompare(b.username, undefined, { sensitivity: "base" });
+    });
+    if (!accepted.length) {
+        acceptedFriendsList.appendChild(makeSocialEmpty("No friends yet."));
+    } else {
+        accepted.forEach(friend => acceptedFriendsList.appendChild(renderFriendRow(friend)));
+    }
+}
+
+function renderDmFriendList() {
+    dmFriendList.replaceChildren();
+    const accepted = acceptedFriends();
+    if (!accepted.length) {
+        dmFriendList.appendChild(makeSocialEmpty("No friends to message."));
+        return;
+    }
+
+    accepted
+        .sort((a, b) => a.username.localeCompare(b.username, undefined, { sensitivity: "base" }))
+        .forEach((friend) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "dmFriendButton"
+                + (friend.userId === activeDmFriendId ? " active" : "")
+                + ((unreadDirectMessages[friend.userId] || 0) > 0 ? " hasUnread" : "");
+            button.textContent = (unreadDirectMessages[friend.userId] || 0) > 0
+                ? `${friend.username} (${unreadDirectMessages[friend.userId]})`
+                : friend.username;
+            button.title = friend.locationLabel || friend.username;
+            button.addEventListener("click", () => selectDirectFriend(friend.userId));
+            dmFriendList.appendChild(button);
+        });
+}
+
+function renderDirectMessages() {
+    dmMessages.replaceChildren();
+    const friend = activeDmFriendId ? friendByUserId(activeDmFriendId) : null;
+    dmHeader.textContent = friend ? friend.username : "Private Messages";
+    dmInput.disabled = !friend;
+    dmSendButton.disabled = !friend;
+
+    if (!friend) {
+        dmMessages.appendChild(makeSocialEmpty("Select a friend to start."));
+        return;
+    }
+
+    const messages = directMessageThreads[activeDmFriendId] || [];
+    if (!messages.length) {
+        dmMessages.appendChild(makeSocialEmpty("No messages yet."));
+    } else {
+        messages.forEach((message) => {
+            const row = document.createElement("div");
+            row.className = "dmMessage" + (message.senderUsername === playerName ? " own" : "");
+            const sender = document.createElement("strong");
+            sender.textContent = `${message.senderUsername}: `;
+            row.appendChild(sender);
+            row.appendChild(document.createTextNode(message.body));
+            dmMessages.appendChild(row);
+        });
+    }
+    dmMessages.scrollTop = dmMessages.scrollHeight;
+}
+
+function renderSocialDrawer() {
+    renderFriendsPanel();
+    renderDmFriendList();
+    renderDirectMessages();
+    updateSocialButtons();
+}
+
+function selectDirectFriend(friendUserId) {
+    activeDmFriendId = friendUserId;
+    unreadDirectMessages[friendUserId] = 0;
+    setSocialTab("messages");
+    socket.emit("openDirectChat", { friendUserId });
+    renderSocialDrawer();
+}
+
+function requestFriendFromPlayer(targetId) {
+    if (!targetId || targetId === myId) return;
+    setSocialNotice("");
+    socket.emit("sendFriendRequest", { targetId });
+}
+
+function openDirectMessageForPlayer(playerData) {
+    const friend = friendByUsername(playerData?.name);
+    if (!friend || friend.status !== "accepted") return false;
+    openSocialDrawer("messages", friend.userId);
+    return true;
+}
+
 function updateChannelControls() {
     const canUseChannels = !!playerName && hasJoinedGame;
     const canCreate = canUseChannels;
@@ -132,6 +398,7 @@ function updateChannelControls() {
     channelTools.style.display = canDeleteCurrentChannel ? "block" : "none";
     channelDeleteButton.style.display = canDeleteCurrentChannel ? "block" : "none";
     channelDeleteButton.disabled = !canDeleteCurrentChannel;
+    updateSocialButtons();
 
     document.querySelectorAll(".channelSelect").forEach((btn) => {
         btn.disabled = false;
@@ -617,6 +884,27 @@ channelBrowserSearch.addEventListener("input", (e) => {
     renderChannelList();
 });
 
+friendsButton.addEventListener("click", () => openSocialDrawer("friends"));
+messagesButton.addEventListener("click", () => openSocialDrawer("messages"));
+socialCloseButton.addEventListener("click", closeSocialDrawer);
+friendsTabButton.addEventListener("click", () => {
+    setSocialTab("friends");
+    renderSocialDrawer();
+});
+messagesTabButton.addEventListener("click", () => {
+    setSocialTab("messages");
+    renderSocialDrawer();
+});
+
+dmForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!activeDmFriendId) return;
+    const body = dmInput.value.trim();
+    if (!body) return;
+    socket.emit("sendDirectMessage", { friendUserId: activeDmFriendId, body });
+    dmInput.value = "";
+});
+
 channelCreateForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const name = channelCreateInput.value.trim();
@@ -886,6 +1174,17 @@ canvas.addEventListener("contextmenu", (e) => {
     document.getElementById("ctxViewProfile").style.display =
         hitPlayer ? "block" : "none";
 
+    const friendState = p ? friendByUsername(p.name) : null;
+    const canMessage = hitPlayer && friendState?.status === "accepted";
+    const isPendingFriend = hitPlayer && friendState?.status === "pending";
+    const canAddFriend = hitPlayer && (!friendState || friendState.status !== "accepted");
+
+    document.getElementById("ctxCanvasMessage").style.display = canMessage ? "block" : "none";
+    const addFriendButton = document.getElementById("ctxCanvasAddFriend");
+    addFriendButton.style.display = canAddFriend ? "block" : "none";
+    addFriendButton.disabled = isPendingFriend;
+    addFriendButton.textContent = isPendingFriend ? "Friend Pending" : "Add Friend";
+
     // Show the "Admin" label and divider only when there are admin options
     // AND there is also a general option (View Profile) below the line.
     const hasAdminOptions = (canModerate && hitTarget) || (canManageRoomTools && (hitBot || !hitTarget));
@@ -949,6 +1248,21 @@ document.getElementById("ctxViewProfile").addEventListener("click", () => {
     if (!targetId) return;
     // Request the profile from the server — response comes back via "profileData"
     socket.emit("getProfile", { targetId });
+    canvasMenu.style.display = "none";
+});
+
+document.getElementById("ctxCanvasAddFriend").addEventListener("click", () => {
+    const targetId = canvasMenu.dataset.targetId;
+    requestFriendFromPlayer(targetId);
+    canvasMenu.style.display = "none";
+    openSocialDrawer("friends");
+});
+
+document.getElementById("ctxCanvasMessage").addEventListener("click", () => {
+    const targetId = canvasMenu.dataset.targetId;
+    if (targetId && players[targetId]) {
+        openDirectMessageForPlayer(players[targetId]);
+    }
     canvasMenu.style.display = "none";
 });
 
@@ -1173,6 +1487,45 @@ socket.on("roomError", (data = {}) => {
 
 socket.on("roomClosed", (data = {}) => {
     setRoomError(data.message || "Room closed.");
+});
+
+socket.on("friendList", (serverFriends) => {
+    friends = Array.isArray(serverFriends) ? serverFriends : [];
+    renderSocialDrawer();
+});
+
+socket.on("friendNotice", (data = {}) => {
+    setSocialNotice(data.message || "");
+    renderSocialDrawer();
+});
+
+socket.on("friendError", (data = {}) => {
+    setSocialNotice(data.message || "Friend action failed.", true);
+    renderSocialDrawer();
+});
+
+socket.on("directHistory", ({ friendUserId, messages } = {}) => {
+    if (!friendUserId) return;
+    directMessageThreads[friendUserId] = Array.isArray(messages) ? messages : [];
+    unreadDirectMessages[friendUserId] = 0;
+    renderSocialDrawer();
+});
+
+socket.on("directMessage", ({ friendUserId, message } = {}) => {
+    if (!friendUserId || !message) return;
+    directMessageThreads[friendUserId] ||= [];
+    if (!directMessageThreads[friendUserId].some(item => item.id === message.id)) {
+        directMessageThreads[friendUserId].push(message);
+    }
+    if (activeDmFriendId !== friendUserId || !socialDrawer.classList.contains("open") || socialTab !== "messages") {
+        unreadDirectMessages[friendUserId] = (unreadDirectMessages[friendUserId] || 0) + 1;
+    }
+    renderSocialDrawer();
+});
+
+socket.on("directError", (data = {}) => {
+    setSocialNotice(data.message || "Private message failed.", true);
+    renderSocialDrawer();
 });
 
 // --- Event: "currentPlayers" ---
@@ -1444,6 +1797,18 @@ document.getElementById("playerList").addEventListener("contextmenu", (e) => {
     // Admin section — only visible to admins, hidden for bots on View Profile
     const isRealPlayer = !p.isBot;
     const canModerate = canModerateCurrentChannel();
+    const friendState = isRealPlayer ? friendByUsername(p.name) : null;
+    const canMessage = isRealPlayer && friendState?.status === "accepted";
+    const isPendingFriend = isRealPlayer && friendState?.status === "pending";
+    const canAddFriend = isRealPlayer && (!friendState || friendState.status !== "accepted");
+
+    document.getElementById("ctxListMessage").style.display = canMessage ? "block" : "none";
+    const addFriendButton = document.getElementById("ctxListAddFriend");
+    addFriendButton.style.display = canAddFriend ? "block" : "none";
+    addFriendButton.disabled = isPendingFriend;
+    addFriendButton.textContent = isPendingFriend ? "Friend Pending" : "Add Friend";
+    document.getElementById("ctxListSocialDivider").style.display =
+        (canMessage || canAddFriend) && canModerate ? "block" : "none";
     document.getElementById("ctxListAdminLabel").style.display = canModerate ? "block" : "none";
     document.getElementById("ctxMute").style.display           = canModerate ? "block" : "none";
     document.getElementById("ctxFreeze").style.display         = canModerate ? "block" : "none";
@@ -1491,6 +1856,20 @@ document.getElementById("ctxFreeze").addEventListener("click", (e) => {
 document.getElementById("ctxListViewProfile").addEventListener("click", () => {
     if (!contextTargetId) return;
     socket.emit("getProfile", { targetId: contextTargetId });
+    contextMenu.style.display = "none";
+});
+
+document.getElementById("ctxListAddFriend").addEventListener("click", () => {
+    if (!contextTargetId) return;
+    requestFriendFromPlayer(contextTargetId);
+    contextMenu.style.display = "none";
+    openSocialDrawer("friends");
+});
+
+document.getElementById("ctxListMessage").addEventListener("click", () => {
+    if (contextTargetId && players[contextTargetId]) {
+        openDirectMessageForPlayer(players[contextTargetId]);
+    }
     contextMenu.style.display = "none";
 });
 

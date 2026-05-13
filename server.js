@@ -47,6 +47,8 @@ const User       = require("./models/User");
 const Channel    = require("./models/Channel");
 const ChannelMember = require("./models/ChannelMember");
 const Room       = require("./models/Room");
+const Friendship = require("./models/Friendship");
+const DirectMessage = require("./models/DirectMessage");
 
 // --- Database Connection ---
 // Connect to MongoDB Atlas using the URI stored in .env.
@@ -113,6 +115,7 @@ const MAX_CHANNEL_NAME_LENGTH = 32;
 const MAX_CHANNEL_DESCRIPTION_LENGTH = 240;
 const MAX_ROOM_NAME_LENGTH = 32;
 const MAX_ROOM_DESCRIPTION_LENGTH = 240;
+const MAX_DIRECT_MESSAGE_LENGTH = 500;
 const CHANNEL_CODE_LENGTH = 6;
 const DEFAULT_ROOM_MODE = "social";
 const ROOM_MODES = new Set(["social", "watch", "game", "custom"]);
@@ -381,6 +384,173 @@ function broadcastChannelList() {
     io.sockets.sockets.forEach((socket) => {
         socket.emit("channelList", publicChannelsForSocket(socket));
     });
+}
+
+function normalizedUserId(userId) {
+    return String(userId || "");
+}
+
+function friendshipPairKey(userIdA, userIdB) {
+    return [normalizedUserId(userIdA), normalizedUserId(userIdB)]
+        .sort()
+        .join(":");
+}
+
+function findOnlineSocketByUserId(userId) {
+    const targetUserId = normalizedUserId(userId);
+    for (const socket of io.sockets.sockets.values()) {
+        if (players[socket.id] && normalizedUserId(socket.data.userId) === targetUserId) {
+            return socket;
+        }
+    }
+    return null;
+}
+
+function friendshipIdentityForViewer(friendship, viewerUserId) {
+    const viewerId = normalizedUserId(viewerUserId);
+    const requesterId = normalizedUserId(friendship.requesterUserId);
+    const isRequester = requesterId === viewerId;
+
+    return {
+        userId: isRequester
+            ? normalizedUserId(friendship.recipientUserId)
+            : requesterId,
+        username: isRequester
+            ? friendship.recipientUsername
+            : friendship.requesterUsername,
+        direction: friendship.status === "pending"
+            ? (isRequester ? "outgoing" : "incoming")
+            : "accepted"
+    };
+}
+
+function publicFriend(friendship, viewerSocket) {
+    const friend = friendshipIdentityForViewer(friendship, viewerSocket?.data?.userId);
+    if (friendship.status !== "accepted") {
+        return {
+            friendshipId: normalizedUserId(friendship._id),
+            userId: friend.userId,
+            username: friend.username,
+            status: friendship.status,
+            direction: friend.direction,
+            online: false,
+            locationLabel: friend.direction === "incoming" ? "Incoming request" : "Request sent",
+            channelId: null,
+            roomId: null,
+            canJoin: false
+        };
+    }
+
+    const friendSocket = findOnlineSocketByUserId(friend.userId);
+    const friendPlayer = friendSocket ? players[friendSocket.id] : null;
+    const room = friendPlayer ? rooms[friendPlayer.roomId || DEFAULT_ROOM_ID] : null;
+    const channel = room ? channels[room.channelId || DEFAULT_CHANNEL_ID] : null;
+
+    let locationLabel = "Offline";
+    let canJoin = false;
+    let channelId = null;
+    let roomId = null;
+
+    if (friendPlayer && room && channel) {
+        const canEnter = canEnterChannel(viewerSocket, channel);
+        const canPreviewPublic = !!channel.isPublic;
+        if (!canEnter && !canPreviewPublic) {
+            locationLabel = "Private Channel";
+        } else {
+            locationLabel = `${channel.name} / ${room.name}`;
+            channelId = channel.id;
+            roomId = room.id;
+            canJoin = canEnter || canPreviewPublic;
+        }
+    }
+
+    return {
+        friendshipId: normalizedUserId(friendship._id),
+        userId: friend.userId,
+        username: friend.username,
+        status: friendship.status,
+        direction: friend.direction,
+        online: !!friendPlayer,
+        locationLabel,
+        channelId,
+        roomId,
+        canJoin
+    };
+}
+
+async function friendshipDocsForUser(userId) {
+    return Friendship.find({
+        $or: [
+            { requesterUserId: userId },
+            { recipientUserId: userId }
+        ],
+        status: { $in: ["pending", "accepted"] }
+    }).sort({ updatedAt: -1 });
+}
+
+async function sendFriendList(socket) {
+    if (!socket?.data?.userId) return;
+    const friendships = await friendshipDocsForUser(socket.data.userId);
+    socket.emit("friendList", friendships.map(friendship => publicFriend(friendship, socket)));
+}
+
+async function sendFriendListToUser(userId) {
+    const targetSocket = findOnlineSocketByUserId(userId);
+    if (targetSocket) {
+        await sendFriendList(targetSocket);
+    }
+}
+
+async function acceptedFriendUserIds(userId) {
+    const viewerId = normalizedUserId(userId);
+    const friendships = await Friendship.find({
+        $or: [
+            { requesterUserId: userId },
+            { recipientUserId: userId }
+        ],
+        status: "accepted"
+    });
+
+    return friendships.map((friendship) => {
+        const requesterId = normalizedUserId(friendship.requesterUserId);
+        return requesterId === viewerId
+            ? normalizedUserId(friendship.recipientUserId)
+            : requesterId;
+    });
+}
+
+async function sendFriendListsForUser(userId, includeSelf = true) {
+    const targetIds = new Set(await acceptedFriendUserIds(userId));
+    if (includeSelf) {
+        targetIds.add(normalizedUserId(userId));
+    }
+
+    await Promise.all([...targetIds].map(id => sendFriendListToUser(id)));
+}
+
+async function acceptedFriendshipBetween(userIdA, userIdB) {
+    return Friendship.findOne({
+        pairKey: friendshipPairKey(userIdA, userIdB),
+        status: "accepted"
+    });
+}
+
+function publicDirectMessage(message, viewerUserId) {
+    const viewerId = normalizedUserId(viewerUserId);
+    const participantIds = Array.isArray(message.participants)
+        ? message.participants.map(normalizedUserId)
+        : [];
+    const friendUserId = participantIds.find(id => id !== viewerId)
+        || normalizedUserId(message.senderUserId);
+
+    return {
+        id: normalizedUserId(message._id),
+        friendUserId,
+        senderUserId: normalizedUserId(message.senderUserId),
+        senderUsername: message.senderUsername,
+        body: message.body,
+        sentAt: message.createdAt ? message.createdAt.getTime() : Date.now()
+    };
 }
 
 function sanitizeChannelName(name) {
@@ -992,6 +1162,11 @@ function movePlayerToRoom(socket, roomId, { announce = true, resetPosition = tru
 
     broadcastRoomList();
     broadcastChannelList();
+    if (socket.data.userId) {
+        sendFriendListsForUser(socket.data.userId).catch((e) => {
+            console.error("friend presence update error:", e.message);
+        });
+    }
 }
 
 io.on("connection", (socket) => {
@@ -1100,6 +1275,7 @@ io.on("connection", (socket) => {
         // Store this player in our server-side dictionary.
         players[socket.id] = {
             name,
+            userId:         String(user._id),
             x:             spawn.x,
             y:             spawn.y,
             chatBubble:    "",
@@ -1180,6 +1356,255 @@ io.on("connection", (socket) => {
         broadcastSpectatorCount();
         broadcastRoomList();
         broadcastChannelList();
+        sendFriendListsForUser(socket.data.userId).catch((e) => {
+            console.error("friend presence update error:", e.message);
+        });
+    });
+
+    socket.on("sendFriendRequest", async ({ targetId, username } = {}) => {
+        const player = players[socket.id];
+        if (!player || !socket.data.userId) return;
+
+        let targetUser = null;
+        try {
+            if (typeof targetId === "string" && players[targetId] && !players[targetId].isBot) {
+                if (players[targetId].roomId !== player.roomId) {
+                    socket.emit("friendError", { message: "That player is no longer nearby." });
+                    return;
+                }
+                targetUser = await User.findOne({ username: players[targetId].name }, "username");
+            } else if (typeof username === "string" && username.trim()) {
+                targetUser = await User.findOne({ username: username.trim().slice(0, MAX_NAME_LENGTH) }, "username");
+            }
+        } catch (e) {
+            console.error("friend target lookup error:", e.message);
+            socket.emit("friendError", { message: "Unable to look up that player right now." });
+            return;
+        }
+
+        if (!targetUser) {
+            socket.emit("friendError", { message: "Player account not found." });
+            return;
+        }
+        if (normalizedUserId(targetUser._id) === normalizedUserId(socket.data.userId)) {
+            socket.emit("friendError", { message: "You cannot add yourself." });
+            return;
+        }
+
+        const pairKey = friendshipPairKey(socket.data.userId, targetUser._id);
+        try {
+            let friendship = await Friendship.findOne({ pairKey });
+            if (friendship?.status === "accepted") {
+                socket.emit("friendNotice", { message: `${targetUser.username} is already your friend.` });
+            } else if (friendship?.status === "pending") {
+                const currentUserIsRecipient = normalizedUserId(friendship.recipientUserId) === normalizedUserId(socket.data.userId);
+                if (currentUserIsRecipient) {
+                    friendship.status = "accepted";
+                    await friendship.save();
+                    socket.emit("friendNotice", { message: `${targetUser.username} is now your friend.` });
+                    const requesterSocket = findOnlineSocketByUserId(friendship.requesterUserId);
+                    if (requesterSocket) {
+                        requesterSocket.emit("friendNotice", { message: `${player.name} accepted your friend request.` });
+                    }
+                } else {
+                    socket.emit("friendNotice", { message: `Friend request already sent to ${targetUser.username}.` });
+                }
+            } else {
+                friendship = await Friendship.create({
+                    pairKey,
+                    requesterUserId: socket.data.userId,
+                    requesterUsername: player.name,
+                    recipientUserId: targetUser._id,
+                    recipientUsername: targetUser.username,
+                    status: "pending"
+                });
+                socket.emit("friendNotice", { message: `Friend request sent to ${targetUser.username}.` });
+                const targetSocket = findOnlineSocketByUserId(targetUser._id);
+                if (targetSocket) {
+                    targetSocket.emit("friendNotice", { message: `${player.name} sent you a friend request.` });
+                }
+            }
+
+            await Promise.all([
+                sendFriendList(socket),
+                sendFriendListToUser(targetUser._id)
+            ]);
+        } catch (e) {
+            console.error("sendFriendRequest error:", e.message);
+            socket.emit("friendError", { message: "Unable to send friend request right now." });
+        }
+    });
+
+    socket.on("respondFriendRequest", async ({ friendshipId, action } = {}) => {
+        if (!players[socket.id] || !socket.data.userId) return;
+        if (typeof friendshipId !== "string") return;
+
+        try {
+            const friendship = await Friendship.findById(friendshipId);
+            if (!friendship || friendship.status !== "pending") {
+                socket.emit("friendError", { message: "Friend request no longer exists." });
+                await sendFriendList(socket);
+                return;
+            }
+            if (normalizedUserId(friendship.recipientUserId) !== normalizedUserId(socket.data.userId)) {
+                socket.emit("friendError", { message: "Only the recipient can answer that request." });
+                return;
+            }
+
+            const requesterUserId = normalizedUserId(friendship.requesterUserId);
+            if (action === "accept") {
+                friendship.status = "accepted";
+                await friendship.save();
+                socket.emit("friendNotice", { message: `${friendship.requesterUsername} is now your friend.` });
+                const requesterSocket = findOnlineSocketByUserId(requesterUserId);
+                if (requesterSocket) {
+                    requesterSocket.emit("friendNotice", { message: `${players[socket.id].name} accepted your friend request.` });
+                }
+            } else if (action === "decline") {
+                await Friendship.deleteOne({ _id: friendship._id });
+                socket.emit("friendNotice", { message: `Friend request from ${friendship.requesterUsername} declined.` });
+            } else {
+                socket.emit("friendError", { message: "Unknown friend action." });
+                return;
+            }
+
+            await Promise.all([
+                sendFriendList(socket),
+                sendFriendListToUser(requesterUserId)
+            ]);
+        } catch (e) {
+            console.error("respondFriendRequest error:", e.message);
+            socket.emit("friendError", { message: "Unable to update friend request right now." });
+        }
+    });
+
+    socket.on("removeFriend", async ({ friendshipId } = {}) => {
+        if (!players[socket.id] || !socket.data.userId || typeof friendshipId !== "string") return;
+
+        try {
+            const friendship = await Friendship.findById(friendshipId);
+            if (!friendship) {
+                await sendFriendList(socket);
+                return;
+            }
+
+            const isRequester = normalizedUserId(friendship.requesterUserId) === normalizedUserId(socket.data.userId);
+            const isRecipient = normalizedUserId(friendship.recipientUserId) === normalizedUserId(socket.data.userId);
+            if (!isRequester && !isRecipient) return;
+
+            const otherUserId = isRequester ? friendship.recipientUserId : friendship.requesterUserId;
+            await Friendship.deleteOne({ _id: friendship._id });
+            socket.emit("friendNotice", { message: "Friend removed." });
+            await Promise.all([
+                sendFriendList(socket),
+                sendFriendListToUser(otherUserId)
+            ]);
+        } catch (e) {
+            console.error("removeFriend error:", e.message);
+            socket.emit("friendError", { message: "Unable to remove friend right now." });
+        }
+    });
+
+    socket.on("joinFriend", async ({ friendUserId } = {}) => {
+        if (!players[socket.id] || !socket.data.userId || typeof friendUserId !== "string") return;
+
+        try {
+            const friendship = await acceptedFriendshipBetween(socket.data.userId, friendUserId);
+            if (!friendship) {
+                socket.emit("friendError", { message: "You can only join accepted friends." });
+                return;
+            }
+
+            const friendSocket = findOnlineSocketByUserId(friendUserId);
+            const friendPlayer = friendSocket ? players[friendSocket.id] : null;
+            const friendRoom = friendPlayer ? rooms[friendPlayer.roomId || DEFAULT_ROOM_ID] : null;
+            const friendChannel = friendRoom ? channels[friendRoom.channelId || DEFAULT_CHANNEL_ID] : null;
+            if (!friendPlayer || !friendRoom || !friendChannel) {
+                socket.emit("friendError", { message: "That friend is offline." });
+                await sendFriendList(socket);
+                return;
+            }
+
+            if (!canEnterChannel(socket, friendChannel)) {
+                if (!friendChannel.isPublic) {
+                    socket.emit("friendError", { message: "That friend is in a private channel." });
+                    await sendFriendList(socket);
+                    return;
+                }
+                await ensureSocketChannelMembership(socket, friendChannel, "member");
+                broadcastChannelList();
+            }
+
+            movePlayerToRoom(socket, friendRoom.id);
+        } catch (e) {
+            console.error("joinFriend error:", e.message);
+            socket.emit("friendError", { message: "Unable to join that friend right now." });
+        }
+    });
+
+    socket.on("openDirectChat", async ({ friendUserId } = {}) => {
+        if (!players[socket.id] || !socket.data.userId || typeof friendUserId !== "string") return;
+
+        try {
+            const friendship = await acceptedFriendshipBetween(socket.data.userId, friendUserId);
+            if (!friendship) {
+                socket.emit("directError", { message: "You can only message accepted friends." });
+                return;
+            }
+
+            const messages = await DirectMessage.find({
+                conversationKey: friendshipPairKey(socket.data.userId, friendUserId)
+            }).sort({ createdAt: -1 }).limit(50);
+
+            socket.emit("directHistory", {
+                friendUserId,
+                messages: messages
+                    .reverse()
+                    .map(message => publicDirectMessage(message, socket.data.userId))
+            });
+        } catch (e) {
+            console.error("openDirectChat error:", e.message);
+            socket.emit("directError", { message: "Unable to load private chat right now." });
+        }
+    });
+
+    socket.on("sendDirectMessage", async ({ friendUserId, body } = {}) => {
+        if (!players[socket.id] || !socket.data.userId || typeof friendUserId !== "string") return;
+        const messageBody = typeof body === "string"
+            ? body.trim().slice(0, MAX_DIRECT_MESSAGE_LENGTH)
+            : "";
+        if (!messageBody) return;
+
+        try {
+            const friendship = await acceptedFriendshipBetween(socket.data.userId, friendUserId);
+            if (!friendship) {
+                socket.emit("directError", { message: "You can only message accepted friends." });
+                return;
+            }
+
+            const conversationKey = friendshipPairKey(socket.data.userId, friendUserId);
+            const message = await DirectMessage.create({
+                conversationKey,
+                participants: [socket.data.userId, friendUserId],
+                senderUserId: socket.data.userId,
+                senderUsername: players[socket.id].name,
+                body: messageBody
+            });
+
+            const senderPayload = publicDirectMessage(message, socket.data.userId);
+            socket.emit("directMessage", { friendUserId, message: senderPayload });
+
+            const friendSocket = findOnlineSocketByUserId(friendUserId);
+            if (friendSocket) {
+                friendSocket.emit("directMessage", {
+                    friendUserId: normalizedUserId(socket.data.userId),
+                    message: publicDirectMessage(message, friendUserId)
+                });
+            }
+        } catch (e) {
+            console.error("sendDirectMessage error:", e.message);
+            socket.emit("directError", { message: "Unable to send private message right now." });
+        }
     });
 
     socket.on("createChannel", async ({ name, isPrivate } = {}) => {
@@ -1842,6 +2267,11 @@ io.on("connection", (socket) => {
         broadcastSpectatorCount();
         broadcastRoomList();
         broadcastChannelList();
+        if (socket.data.userId) {
+            sendFriendListsForUser(socket.data.userId, false).catch((e) => {
+                console.error("friend presence update error:", e.message);
+            });
+        }
     });
 });
 
