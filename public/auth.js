@@ -127,8 +127,10 @@ function enterGame(token, username, user = {}, options = {}) {
         window.showEmailCapture("Add a valid email to continue.");
     } else if (user.requiresEmailVerification) {
         const message = options.verificationSent
-            ? "Verification link sent. Check the server console in local dev."
-            : "Verify your email or use Resend for a fresh link.";
+            ? "Verification email sent. Check your inbox."
+            : (options.verificationConsoleFallback
+                ? "Verification link created. Check the server console in local dev."
+                : "Verify your email or use Resend for a fresh link.");
         window.showEmailVerificationPrompt(message);
     } else {
         window.hideEmailVerificationPrompt();
@@ -261,7 +263,8 @@ formLogin.addEventListener("submit", async (e) => {
 
     if (ok) {
         enterGame(data.token, data.user.username, data.user, {
-            verificationSent: !!data.verificationSent
+            verificationSent: !!data.verificationSent,
+            verificationConsoleFallback: !!data.verificationConsoleFallback
         });
     } else {
         // Show the error message returned by the server
@@ -297,7 +300,8 @@ formRegister.addEventListener("submit", async (e) => {
 
     if (ok) {
         enterGame(data.token, data.user.username, data.user, {
-            verificationSent: !!data.verificationSent
+            verificationSent: !!data.verificationSent,
+            verificationConsoleFallback: !!data.verificationConsoleFallback
         });
     } else {
         errorRegister.textContent = data.error || "Registration failed";
@@ -332,7 +336,11 @@ emailCaptureForm.addEventListener("submit", async (e) => {
         localStorage.setItem(USERNAME_KEY, data.user.username);
         emailOverlay.style.display = "none";
         if (data.user.requiresEmailVerification) {
-            window.showEmailVerificationPrompt("Verification link sent. Check the server console in local dev.");
+            window.showEmailVerificationPrompt(data.verificationSent
+                ? "Verification email sent. Check your inbox."
+                : (data.verificationConsoleFallback
+                    ? "Verification link created. Check the server console in local dev."
+                    : "Verify your email or use Resend for a fresh link."));
         } else {
             window.hideEmailVerificationPrompt();
         }

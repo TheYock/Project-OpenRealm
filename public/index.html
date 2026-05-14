@@ -33,14 +33,23 @@
                 text-align: center;          /* Center the h1 heading */
             }
 
-            h1 {
-                margin: 20px 12px;
-                font-size: 2rem;
+            body > h1 {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                margin: -1px;
+                padding: 0;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                clip-path: inset(50%);
+                white-space: nowrap;
+                border: 0;
             }
 
             #worldShell {
                 width: min(1480px, calc(100% - 24px));
                 margin: 0 auto;
+                padding-top: 10px;
                 display: grid;
                 grid-template-columns: 260px minmax(0, 1140px);
                 gap: 16px;
@@ -49,6 +58,7 @@
 
             #realmMain {
                 min-width: 0;
+                position: relative;
             }
 
             #channelSidebar {
@@ -56,9 +66,9 @@
                 flex-direction: column;
                 gap: 12px;
                 position: sticky;
-                top: 54px;
+                top: 50px;
                 align-self: start;
-                max-height: calc(100vh - 66px);
+                max-height: calc(100vh - 62px);
                 overflow-y: auto;
                 min-height: 600px;
                 padding: 12px;
@@ -557,8 +567,8 @@
 
             #roomModePanel {
                 display: none;
-                margin: 8px 0 0;
-                padding: 8px 12px;
+                margin: 6px 0 0;
+                padding: 6px 10px;
                 border: 1px solid #333;
                 background: #151515;
                 text-align: left;
@@ -577,13 +587,13 @@
                 justify-content: space-between;
                 gap: 10px;
                 margin: 0;
-                min-width: 190px;
+                min-width: 150px;
             }
 
             .roomModeHeader h3 {
                 margin: 0;
                 color: #4caf50;
-                font-size: 0.95rem;
+                font-size: 0.86rem;
             }
 
             .roomModeHeader span,
@@ -598,7 +608,7 @@
                 flex: 1;
                 min-width: 160px;
                 color: #ccc;
-                font-size: 0.86rem;
+                font-size: 0.8rem;
                 line-height: 1.4;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -617,12 +627,12 @@
             .roomModeChip {
                 display: inline-flex;
                 align-items: center;
-                padding: 5px 8px;
+                padding: 4px 7px;
                 border: 1px solid #444;
                 border-radius: 4px;
                 color: #ddd;
                 text-decoration: none;
-                font-size: 0.76rem;
+                font-size: 0.72rem;
             }
 
             .roomModeActions a,
@@ -647,9 +657,9 @@
                 display: flex;
                 justify-content: center;     /* Center the children horizontally on the page */
                 align-items: flex-start;     /* Align children to the top (not stretched to equal height) */
-                gap: 20px;                   /* Add 20px of space between the canvas and chat panel */
+                gap: 18px;                   /* Add space between the canvas and chat panel */
                 width: 100%;
-                margin: 20px 0 0;            /* Push everything down from the room bar */
+                margin: 10px 0 0;            /* Keep the live room close to the top chrome */
             }
 
             /* --- Canvas --- */
@@ -721,11 +731,11 @@
             #roomBar {
                 width: 100%;
                 margin: 0;
-                padding: 9px 12px;
+                padding: 7px 10px;
                 display: flex;
                 align-items: center;
                 flex-wrap: wrap;
-                gap: 14px;
+                gap: 10px;
                 background: #181818;
                 border: 1px solid #333;
             }
@@ -748,28 +758,28 @@
             #currentChannelName,
             #currentRoomName {
                 color: #4caf50;
-                font-size: 0.95rem;
+                font-size: 0.9rem;
                 white-space: nowrap;
             }
 
             #roomBarActions {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 7px;
+                gap: 6px;
                 margin-left: auto;
             }
 
             #roomBarActions button {
                 display: none;
                 align-items: center;
-                padding: 6px 9px;
+                padding: 5px 8px;
                 border: 1px solid #4caf50;
                 border-radius: 4px;
                 background: transparent;
                 color: #4caf50;
                 cursor: pointer;
                 font-weight: bold;
-                font-size: 0.76rem;
+                font-size: 0.72rem;
             }
 
             #roomBarActions button:hover:not(:disabled) {
@@ -783,10 +793,19 @@
             }
 
             #channelHome {
-                margin: 0 0 12px;
-                padding: 14px;
+                position: fixed;
+                top: 96px;
+                right: max(16px, calc((100vw - 1480px) / 2 + 16px));
+                z-index: 1800;
+                width: min(700px, calc(100vw - 32px));
+                max-height: calc(100vh - 72px);
+                overflow-y: auto;
+                margin: 0;
+                padding: 12px;
                 border: 1px solid #333;
+                border-radius: 6px;
                 background: #181818;
+                box-shadow: 0 22px 70px rgba(0, 0, 0, 0.68);
                 text-align: left;
             }
 
@@ -959,6 +978,30 @@
                 gap: 6px;
             }
 
+            #siteFooter {
+                width: min(1480px, calc(100% - 24px));
+                margin: 18px auto 14px;
+                padding: 10px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 10px;
+                border-top: 1px solid #2f2f2f;
+                color: #777;
+                font-size: 0.78rem;
+                text-align: left;
+            }
+
+            #siteFooter strong {
+                color: #4caf50;
+                font-weight: bold;
+            }
+
+            #siteFooter span {
+                white-space: nowrap;
+            }
+
             #channelBrowserOverlay {
                 display: none;
                 position: fixed;
@@ -977,7 +1020,7 @@
             #channelBrowserWindow {
                 display: flex;
                 flex-direction: column;
-                width: min(900px, 100%);
+                width: min(980px, 100%);
                 max-height: min(760px, calc(100vh - 48px));
                 border: 1px solid #383838;
                 border-radius: 8px;
@@ -1020,6 +1063,60 @@
 
             #channelBrowserClose:hover {
                 color: white;
+            }
+
+            #channelBrowserTools {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                gap: 10px;
+                padding: 14px 18px;
+                border-bottom: 1px solid #2c2c2c;
+                background: #141414;
+            }
+
+            .channelBrowserTool {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+                align-items: end;
+                min-width: 0;
+            }
+
+            .channelBrowserToolHeader {
+                grid-column: 1 / -1;
+                display: grid;
+                gap: 2px;
+            }
+
+            .channelBrowserToolHeader span {
+                color: #777;
+                font-size: 0.68rem;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+            }
+
+            .channelBrowserToolHeader strong {
+                color: #eee;
+                font-size: 0.88rem;
+            }
+
+            #channelBrowserTools #channelCreateForm,
+            #channelBrowserTools #channelJoinCodeForm {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+            }
+
+            #channelBrowserTools #channelPrivateLabel,
+            #channelBrowserTools #channelCodeDisplay {
+                grid-column: 1 / -1;
+                margin: 0;
+            }
+
+            #channelBrowserTools #channelError {
+                grid-column: 1 / -1;
+                min-height: 0;
+                margin: 0;
             }
 
             #channelBrowserFilters {
@@ -2468,11 +2565,6 @@
                     overflow-x: hidden;
                 }
 
-                h1 {
-                    font-size: 1.55rem;
-                    margin: 18px 12px;
-                }
-
                 #spectatorBanner,
                 #playerBar,
                 #emailVerificationBanner {
@@ -2521,7 +2613,7 @@
                     align-items: center;
                     width: 100%;
                     gap: 14px;
-                    margin-top: 14px;
+                    margin-top: 10px;
                 }
 
                 #roomBar {
@@ -2537,6 +2629,19 @@
                 #roomModePanel.visible {
                     align-items: flex-start;
                     flex-direction: column;
+                }
+
+                #siteFooter {
+                    justify-content: center;
+                    text-align: center;
+                }
+
+                #channelHome {
+                    top: 112px;
+                    right: 8px;
+                    left: 8px;
+                    width: auto;
+                    max-height: calc(100vh - 92px);
                 }
 
                 .roomModeBody {
@@ -2595,6 +2700,7 @@
                     max-height: calc(100vh - 20px);
                 }
 
+                #channelBrowserTools,
                 #channelBrowserFilters,
                 #channelBrowserResults {
                     grid-template-columns: 1fr;
@@ -2794,20 +2900,6 @@
                     <h2>Channels</h2>
                     <span id="sidebarCurrentChannelName">OpenRealm</span>
                 </div>
-                <form id="channelCreateForm">
-                    <input type="text" id="channelCreateInput" maxlength="32" placeholder="New channel" />
-                    <button type="submit" id="channelCreateButton" title="Create channel">+</button>
-                </form>
-                <label id="channelPrivateLabel">
-                    <input type="checkbox" id="channelPrivateToggle" />
-                    Private channel
-                </label>
-                <form id="channelJoinCodeForm">
-                    <input type="text" id="channelCodeInput" maxlength="12" placeholder="Channel code" />
-                    <button type="submit" id="channelJoinCodeButton">Join</button>
-                </form>
-                <p id="channelCodeDisplay"></p>
-                <p id="channelError"></p>
                 <section class="channelSection">
                     <h3>Favorites</h3>
                     <div class="channelList" id="favoriteChannelList"></div>
@@ -2861,7 +2953,7 @@
                 <strong id="currentRoomName">Town Square</strong>
             </div>
             <div id="roomBarActions">
-                <button type="button" id="roomBarChannelInfoButton">Channel Info</button>
+                <button type="button" id="roomBarChannelInfoButton">Info</button>
                 <button type="button" id="roomBarNewRoomButton">New Room</button>
                 <button type="button" id="roomBarChannelSettingsButton">Channel Settings</button>
                 <button type="button" id="roomBarRoomSettingsButton">Room Settings</button>
@@ -2930,6 +3022,11 @@
             </main>
         </div>
 
+        <footer id="siteFooter">
+            <span><strong>OpenRealm</strong> v0.2.4</span>
+            <span>Created by <strong>YockMakesGames</strong></span>
+        </footer>
+
         <div id="channelBrowserOverlay" aria-hidden="true">
             <section id="channelBrowserWindow" role="dialog" aria-modal="true" aria-labelledby="channelBrowserTitle">
                 <div id="channelBrowserHeader">
@@ -2938,6 +3035,30 @@
                         <h2 id="channelBrowserTitle">Channel Browser</h2>
                     </div>
                     <button type="button" id="channelBrowserClose" title="Close">x</button>
+                </div>
+                <div id="channelBrowserTools">
+                    <form id="channelCreateForm" class="channelBrowserTool">
+                        <div class="channelBrowserToolHeader">
+                            <span>Create</span>
+                            <strong>New channel</strong>
+                        </div>
+                        <input type="text" id="channelCreateInput" maxlength="32" placeholder="Channel name" />
+                        <button type="submit" id="channelCreateButton" title="Create channel">Create</button>
+                        <label id="channelPrivateLabel">
+                            <input type="checkbox" id="channelPrivateToggle" />
+                            Private channel
+                        </label>
+                    </form>
+                    <form id="channelJoinCodeForm" class="channelBrowserTool">
+                        <div class="channelBrowserToolHeader">
+                            <span>Private</span>
+                            <strong>Join by code</strong>
+                        </div>
+                        <input type="text" id="channelCodeInput" maxlength="12" placeholder="Channel code" />
+                        <button type="submit" id="channelJoinCodeButton">Join</button>
+                        <p id="channelCodeDisplay"></p>
+                    </form>
+                    <p id="channelError"></p>
                 </div>
                 <div id="channelBrowserFilters">
                     <input type="search" id="channelBrowserSearch" maxlength="64" placeholder="Search public channels" />

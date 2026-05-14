@@ -14,6 +14,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { sendVerificationEmail } = require("../services/email");
 
 // express.Router() creates a mini app that handles a group of
 // related routes. We mount it in server.js under "/api".
@@ -109,9 +110,16 @@ async function issueEmailVerification(user, req) {
     user.emailVerificationExpiresAt = new Date(Date.now() + VERIFICATION_TOKEN_LIFETIME_MS);
     await user.save();
 
-    // Local-dev delivery path. A real SMTP provider can replace this later.
-    console.log(`[email verification] ${user.username}: ${verificationUrl}`);
-    return verificationUrl;
+    const delivery = await sendVerificationEmail({
+        to: user.email,
+        username: user.username,
+        verificationUrl
+    });
+
+    return {
+        verificationUrl,
+        ...delivery
+    };
 }
 
 async function userFromAuthHeader(req) {
@@ -230,7 +238,7 @@ router.post("/register", async (req, res) => {
         });
 
         await user.save();
-        await issueEmailVerification(user, req);
+        const verificationDelivery = await issueEmailVerification(user, req);
 
         // --- Sign a JWT ---
         // jwt.sign() creates a token containing a payload (the data
@@ -244,7 +252,8 @@ router.post("/register", async (req, res) => {
         res.status(201).json({
             token,
             user: publicUser(user),
-            verificationSent: true
+            verificationSent: !!verificationDelivery?.sent,
+            verificationConsoleFallback: verificationDelivery?.provider === "console"
         });
 
     } catch (err) {
@@ -324,12 +333,13 @@ router.post("/account/email", async (req, res) => {
         }
 
         user.email = email;
-        await issueEmailVerification(user, req);
+        const verificationDelivery = await issueEmailVerification(user, req);
 
         res.json({
             token: signUserToken(user),
             user: publicUser(user),
-            verificationSent: true
+            verificationSent: !!verificationDelivery?.sent,
+            verificationConsoleFallback: verificationDelivery?.provider === "console"
         });
     } catch (err) {
         if (err.statusCode) {
@@ -358,9 +368,13 @@ router.post("/resend-verification", async (req, res) => {
             });
         }
 
-        await issueEmailVerification(user, req);
+        const verificationDelivery = await issueEmailVerification(user, req);
         res.json({
-            message: "Verification link sent. Check the server console in local dev.",
+            message: verificationDelivery?.sent
+                ? "Verification email sent. Check your inbox."
+                : "Verification link created. Check the server console in local dev.",
+            verificationSent: !!verificationDelivery?.sent,
+            verificationConsoleFallback: verificationDelivery?.provider === "console",
             user: publicUser(user)
         });
     } catch (err) {

@@ -151,6 +151,7 @@ let channelBrowserSortMode = "activity";
 let channelBrowserOnlyUnjoined = false;
 let channelBrowserOnlyActive = false;
 let channelBrowserOnlyRooms = false;
+let channelBrowserPendingAction = "";
 let friends = [];
 let socialTab = "friends";
 let activeDmFriendId = null;
@@ -539,7 +540,7 @@ function updateRoomBarActions() {
     const canManageRoomSettings = canUse && !!currentRoom && (!!currentRoom.canCustomize || !!currentRoom.canClose);
 
     setActionButtonVisible(roomBarChannelInfoButton, canViewChannelInfo, !canViewChannelInfo);
-    roomBarChannelInfoButton.textContent = forceChannelHomeOpen ? "Hide Info" : "Channel Info";
+    roomBarChannelInfoButton.textContent = forceChannelHomeOpen ? "Hide Info" : "Info";
     setActionButtonVisible(roomBarNewRoomButton, canManageRooms, !canManageRooms);
     setActionButtonVisible(roomBarChannelSettingsButton, canManageChannelSettings, !canManageChannelSettings);
     setActionButtonVisible(roomBarRoomSettingsButton, canManageRoomSettings, !canManageRoomSettings);
@@ -880,6 +881,15 @@ function selectChannelHome(channelId) {
     updateRoomBarActions();
 }
 
+function closeChannelHomePanel() {
+    forceChannelHomeOpen = false;
+    if (currentChannelId) {
+        selectedHomeChannelId = currentChannelId;
+    }
+    renderChannelHome();
+    updateRoomBarActions();
+}
+
 function formatChannelCreatedAt(channel) {
     const createdAt = Number(channel?.createdAt);
     if (!createdAt) return "";
@@ -1047,6 +1057,9 @@ function renderChannelHome() {
             socket.emit("joinChannel", { channelId: channel.id });
         }));
     }
+    if (currentRoomId || currentChannelId) {
+        actions.appendChild(makeHomeAction("Close", "secondary", closeChannelHomePanel));
+    }
 
     header.appendChild(titleBlock);
     header.appendChild(actions);
@@ -1166,6 +1179,7 @@ function openChannelBrowser() {
 function closeChannelBrowser() {
     channelBrowserOverlay.classList.remove("open");
     channelBrowserOverlay.setAttribute("aria-hidden", "true");
+    channelBrowserPendingAction = "";
 }
 
 function channelMatchesBrowserQuery(channel, query) {
@@ -1576,10 +1590,9 @@ channelCreateForm.addEventListener("submit", (e) => {
         return;
     }
 
-    setChannelError("");
+    channelBrowserPendingAction = "create";
+    setChannelError("Creating channel...", false);
     socket.emit("createChannel", { name, isPrivate: channelPrivateToggle.checked });
-    channelCreateInput.value = "";
-    channelPrivateToggle.checked = false;
 });
 
 channelJoinCodeForm.addEventListener("submit", (e) => {
@@ -1595,9 +1608,9 @@ channelJoinCodeForm.addEventListener("submit", (e) => {
         return;
     }
 
-    setChannelError("");
+    channelBrowserPendingAction = "joinCode";
+    setChannelError("Checking channel code...", false);
     socket.emit("joinChannelByCode", { code });
-    channelCodeInput.value = "";
 });
 
 manageClose.addEventListener("click", closeManageOverlay);
@@ -2273,6 +2286,16 @@ socket.on("channelChanged", ({ channel } = {}) => {
     expandedChannelIds.add(channel.id);
     setCurrentChannelUi(channel);
     setChannelError("");
+    if (channelBrowserPendingAction && channelBrowserOverlay.classList.contains("open")) {
+        if (channelBrowserPendingAction === "create") {
+            channelCreateInput.value = "";
+            channelPrivateToggle.checked = false;
+        }
+        if (channelBrowserPendingAction === "joinCode") {
+            channelCodeInput.value = "";
+        }
+        closeChannelBrowser();
+    }
     channelBanPanel.style.display = "none";
     channelBanPanel.replaceChildren();
     if (channel.roomCount === 0) {
@@ -2316,6 +2339,7 @@ socket.on("roomChanged", ({ room } = {}) => {
 });
 
 socket.on("channelError", (data = {}) => {
+    channelBrowserPendingAction = "";
     setChannelError(data.message || "Channel action failed.", data.ok !== true);
     if (manageOverlay.classList.contains("open") && manageTab === "channel") {
         setManageStatus(data.message || "Channel action failed.", data.ok !== true);

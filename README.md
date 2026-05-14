@@ -1,6 +1,6 @@
 # OpenRealm
 
-Version: `0.2.3`
+Version: `0.2.4`
 
 OpenRealm is a browser-based multiplayer social game where players can log in, enter live rooms, chat, customize their avatar color, and move around a shared 2D canvas world.
 
@@ -39,13 +39,14 @@ New accounts require a username, valid email, and password. Registration creates
 
 Login accepts either username or email with the account password. Older accounts created before email support are prompted to add a valid email after authentication.
 
-In local development, verification links are printed to the server console:
+Verification emails are sent through Resend when `RESEND_API_KEY` and `EMAIL_FROM` are configured. Without an email provider, verification links fall back to the server console for local development:
 
 ```text
 [email verification] Username: http://localhost:3000/api/verify-email?token=...
 ```
 
 Set `PUBLIC_URL` in `.env` when testing behind a tunnel or deployed host so generated links use the public address.
+For production, set `PUBLIC_URL` to your deployed app URL and use a verified sender such as `OpenRealm <donotreply@joinopenrealm.com>`.
 
 ## Channels And Rooms
 
@@ -120,6 +121,8 @@ Create a `.env` file:
 MONGODB_URI=<your MongoDB connection string>
 JWT_SECRET=<your JWT secret>
 PUBLIC_URL=http://localhost:3000
+RESEND_API_KEY=<optional Resend API key for real email delivery>
+EMAIL_FROM=OpenRealm <donotreply@joinopenrealm.com>
 PORT=3000
 ```
 
@@ -161,6 +164,17 @@ routes/auth.js         Register/login API routes
 makeAdmin.js           Grants admin and creation privileges
 setRoomCreator.js      Grants/revokes creation privileges only
 ```
+
+## Version 0.2.4 Notes
+
+- Started the room-first layout pass so the game canvas is front and center by default.
+- Removed the large page title from the visible play layout.
+- Changed Channel Home into a floating info panel so it no longer pushes the live room below the fold.
+- Slimmed the room location bar and live room-mode strip to reduce top chrome.
+- Added a compact footer with build version and creator credit.
+- Added Resend-powered verification email delivery with local console fallback.
+- Moved channel creation and private-code joining into the Channel Browser to keep the left rail focused on navigation.
+- Hardened duplicate-session cleanup so stale player records are removed when the same account reconnects.
 
 ## Version 0.2.3 Notes
 

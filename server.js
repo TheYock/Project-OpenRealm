@@ -1334,6 +1334,119 @@ function broadcastSpectatorCount() {
     io.emit("spectatorCount", spectators);
 }
 
+async function persistRemainingRestrictions(socketId) {
+    const player = players[socketId];
+    if (!player || player.isBot) {
+        clearAllRestrictionTimers(socketId);
+        return {};
+    }
+
+    const updates = {};
+    if (hasRestrictionTimer(socketId, "mute") && player.muteExpiresAt) {
+        updates.muteRemainingMs = Math.max(0, player.muteExpiresAt - Date.now());
+    }
+    if (hasRestrictionTimer(socketId, "freeze") && player.freezeExpiresAt) {
+        updates.freezeRemainingMs = Math.max(0, player.freezeExpiresAt - Date.now());
+    }
+
+    if (Object.keys(updates).length) {
+        try {
+            const query = player.userId ? { _id: player.userId } : { username: player.name };
+            await User.updateOne(query, updates);
+        } catch (e) {
+            console.error("restriction persistence error:", e.message);
+        }
+    }
+
+    clearAllRestrictionTimers(socketId);
+    return updates;
+}
+
+async function removePlayerSession(socketId, {
+    announce = false,
+    disconnectSocket = false,
+    notifyReason = ""
+} = {}) {
+    const oldSocket = io.sockets.sockets.get(socketId);
+    const player = players[socketId];
+    const roomId = player?.roomId || oldSocket?.data?.roomId || DEFAULT_ROOM_ID;
+    const userId = player?.userId || oldSocket?.data?.userId || null;
+    const username = player?.name || oldSocket?.data?.username || null;
+
+    if (oldSocket && notifyReason) {
+        oldSocket.emit("forcedDisconnect", notifyReason);
+    }
+
+    if (player) {
+        if (announce) {
+            io.to(roomChannel(roomId)).emit("chatMessage", {
+                name: "System",
+                message: `${player.name} left ${rooms[roomId]?.name || "the room"}`
+            });
+        }
+
+        await persistRemainingRestrictions(socketId);
+        delete players[socketId];
+        io.to(roomChannel(roomId)).emit("playerDisconnected", socketId);
+    } else {
+        clearAllRestrictionTimers(socketId);
+    }
+
+    if (username && userSockets[username] === socketId) {
+        delete userSockets[username];
+    }
+    for (const [mappedUsername, mappedSocketId] of Object.entries(userSockets)) {
+        if (mappedSocketId === socketId) {
+            delete userSockets[mappedUsername];
+        }
+    }
+
+    if (disconnectSocket && oldSocket && !oldSocket.disconnected) {
+        oldSocket.disconnect(true);
+    }
+
+    broadcastSpectatorCount();
+    broadcastRoomList();
+    broadcastChannelList();
+    if (userId) {
+        sendFriendListsForUser(userId, false).catch((e) => {
+            console.error("friend presence update error:", e.message);
+        });
+    }
+}
+
+async function removeDuplicatePlayerSessions(socket, user, username) {
+    const userId = String(user._id);
+    const duplicateIds = new Set();
+
+    const rememberedSocketId = userSockets[username];
+    if (rememberedSocketId && rememberedSocketId !== socket.id) {
+        duplicateIds.add(rememberedSocketId);
+    }
+
+    for (const [id, player] of Object.entries(players)) {
+        if (id === socket.id || player.isBot) continue;
+        if (String(player.userId || "") === userId || player.name === username) {
+            duplicateIds.add(id);
+        }
+    }
+
+    for (const [id, connectedSocket] of io.sockets.sockets) {
+        if (id === socket.id) continue;
+        if (connectedSocket.data.userId === userId || connectedSocket.data.username === username) {
+            duplicateIds.add(id);
+        }
+    }
+
+    for (const id of duplicateIds) {
+        await removePlayerSession(id, {
+            announce: false,
+            disconnectSocket: true,
+            notifyReason: "You logged in from another window."
+        });
+    }
+}
+
 // --- scheduleExpiry ---
 // Sets a setTimeout to auto-reverse a timed mute or freeze for `targetId`.
 // Expects players[targetId].muteExpiresAt / freezeExpiresAt to already be set.
@@ -1640,6 +1753,8 @@ io.on("connection", (socket) => {
         await migrateFavoriteMemberships(user);
         socket.data.channelMemberships = await loadChannelMembershipMap(user._id);
 
+        await removeDuplicatePlayerSessions(socket, user, name);
+
         // Clamp x and y to keep the player inside the world.
         // Math.max(0, ...) prevents negative values (off the left/top edge).
         // Math.min(..., WORLD_WIDTH) prevents values beyond the right/bottom edge.
@@ -1654,18 +1769,6 @@ io.on("connection", (socket) => {
         }
         const roomId = requestedRoom.id;
         const spawn = pickSpawnPosition(roomId, requestedX, requestedY);
-
-        // --- Duplicate Login Check ---
-        // If this username is already connected on another socket, disconnect
-        // that old session before registering the new one. This prevents two
-        // copies of the same player appearing when someone opens a second tab.
-        if (userSockets[name]) {
-            const oldSocket = io.sockets.sockets.get(userSockets[name]);
-            if (oldSocket) {
-                oldSocket.emit("forcedDisconnect", "You logged in from another window.");
-                oldSocket.disconnect(true);
-            }
-        }
 
         // Track which socket owns this username.
         userSockets[name] = socket.id;
@@ -3001,64 +3104,17 @@ io.on("connection", (socket) => {
     // Fires automatically when a player closes their browser tab,
     // loses connection, or navigates away.
     socket.on("disconnect", () => {
-        const roomId = players[socket.id]?.roomId || socket.data.roomId || DEFAULT_ROOM_ID;
-
-        // If the player had joined, announce their departure in chat.
-        if (players[socket.id]) {
-            io.to(roomChannel(roomId)).emit("chatMessage", {
-                name: "System",
-                message: `${players[socket.id].name} left ${rooms[roomId]?.name || "the room"}`
-            });
-        }
-
         console.log("Player disconnected:", socket.id);
 
-        // Pause timed mute/freeze: write the remaining ms back to MongoDB so the
-        // countdown resumes from where it left off when the player rejoins.
-        if (players[socket.id] && !players[socket.id].isBot) {
-            const p = players[socket.id];
-            const updates = {};
-
-            if (hasRestrictionTimer(socket.id, "mute") && p.muteExpiresAt) {
-                updates.muteRemainingMs = Math.max(0, p.muteExpiresAt - Date.now());
-            }
-            if (hasRestrictionTimer(socket.id, "freeze") && p.freezeExpiresAt) {
-                updates.freezeRemainingMs = Math.max(0, p.freezeExpiresAt - Date.now());
-            }
-
-            if (Object.keys(updates).length) {
-                User.updateOne({ username: p.name }, updates).catch(() => {});
-            }
-
-            clearAllRestrictionTimers(socket.id);
-        }
-
-        // Remove them from the server's player dictionary so they
-        // no longer take up memory or appear in currentPlayers snapshots.
-        delete players[socket.id];
+        removePlayerSession(socket.id, { announce: true }).catch((e) => {
+            console.error("disconnect cleanup error:", e.message);
+        });
 
         // Clean up the username → socket mapping, but only if it still
         // points to this socket. If a duplicate login already replaced it
         // with a new socket ID, we don't want to wipe that newer entry.
-        for (const [username, sid] of Object.entries(userSockets)) {
-            if (sid === socket.id) {
-                delete userSockets[username];
-                break;
-            }
-        }
-
         // Tell all clients to remove this player from their local state.
-        io.to(roomChannel(roomId)).emit("playerDisconnected", socket.id);
-
         // Someone left — recalculate the spectator count.
-        broadcastSpectatorCount();
-        broadcastRoomList();
-        broadcastChannelList();
-        if (socket.data.userId) {
-            sendFriendListsForUser(socket.data.userId, false).catch((e) => {
-                console.error("friend presence update error:", e.message);
-            });
-        }
     });
 });
 
