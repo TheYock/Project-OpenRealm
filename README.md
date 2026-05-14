@@ -1,12 +1,16 @@
 # OpenRealm
 
-Version: `0.2.4`
+Version: `0.2.5`
 
 OpenRealm is a browser-based multiplayer social game where players can log in, enter live rooms, chat, customize their avatar color, and move around a shared 2D canvas world.
 
 The project is moving toward a Discord-like social structure: public channels contain individual rooms, users can browse, join, and favorite channels, and channel owners can shape their own communities.
 
 ## Current Features
+
+- Invite-only registration — new accounts require a valid invite code
+- Full-screen landing page with title, tagline, Coming Soon and Invite Only badges, and a contact link
+- Contact and bug report form with name, email, type (bug / feedback / invite request), and message fields saved to MongoDB with optional admin email notification
 
 - Real-time multiplayer presence with Socket.IO
 - Account registration with username/email/password, login with username or email, and email verification
@@ -123,6 +127,7 @@ JWT_SECRET=<your JWT secret>
 PUBLIC_URL=http://localhost:3000
 RESEND_API_KEY=<optional Resend API key for real email delivery>
 EMAIL_FROM=OpenRealm <donotreply@joinopenrealm.com>
+ADMIN_EMAIL=<optional email to receive contact form notifications>
 PORT=3000
 ```
 
@@ -138,6 +143,20 @@ Then open:
 http://localhost:3000
 ```
 
+## Invite Codes
+
+Registration is invite-only. Existing accounts can still log in without a code.
+
+Generate and manage invite codes from the terminal:
+
+```bash
+node makeInvite.js                          # random single-use code
+node makeInvite.js mycode                   # custom single-use code
+node makeInvite.js mycode 5 "For the team"  # 5 uses with a note
+node makeInvite.js mycode -1                # unlimited uses
+node makeInvite.js --list                   # list all codes and usage counts
+```
+
 ## Useful Scripts
 
 ```bash
@@ -145,6 +164,8 @@ npm start
 node makeAdmin.js <username>
 node setRoomCreator.js <username> on
 node setRoomCreator.js <username> off
+node makeInvite.js [code] [maxUses] [note]
+node makeInvite.js --list
 ```
 
 ## Project Structure
@@ -158,12 +179,32 @@ models/User.js         User accounts, permissions, favorites, avatar data
 models/Channel.js      Public channel containers
 models/ChannelMember.js Channel membership, roles, and membership status
 models/Room.js         Joinable rooms, modes, and mode customization config
-models/Friendship.js   Friend requests and accepted friend relationships
-models/DirectMessage.js Private one-to-one chat messages
-routes/auth.js         Register/login API routes
-makeAdmin.js           Grants admin and creation privileges
-setRoomCreator.js      Grants/revokes creation privileges only
+models/Friendship.js        Friend requests and accepted friend relationships
+models/DirectMessage.js     Private one-to-one chat messages
+models/InviteCode.js        Invite codes for registration gating
+models/ContactSubmission.js Bug reports, feedback, and invite requests from the contact form
+routes/auth.js              Register/login/contact API routes
+services/email.js           Resend email delivery for verification and contact notifications
+makeAdmin.js                Grants admin and creation privileges
+setRoomCreator.js           Grants/revokes creation privileges only
+makeInvite.js               Generates and lists invite codes
 ```
+
+## Version 0.2.5 Notes
+
+- Added Invite Only badge to the landing screen alongside the Coming Soon badge.
+- Added a Contact & Bug Reports modal accessible from the landing page and the register form.
+- Contact form supports bug reports, general feedback, and invite code requests — saved to MongoDB.
+- Optional admin email notification via Resend when `ADMIN_EMAIL` is set in `.env`.
+- Added "Don't have a code? Request one" shortcut on the register form that opens the contact modal pre-set to Invite Code Request.
+- Per-section collapse for the left channel sidebar — Favorites and Joined Channels toggle independently with state saved to localStorage.
+- Chat `@mention` highlighting — tagged players see their name highlighted in messages.
+- Click ripple animation on the canvas (local only, not synced to other players).
+- Per-socket rate limiting for chat (5 per 5 s) and movement (20 per 1 s).
+- Room name uniqueness enforced per channel on creation.
+- Muted bots no longer reply to `@mention` messages.
+- Stale channel membership cache cleared immediately on kick and ban.
+- Force-move system message posted in the destination room when a room is closed.
 
 ## Version 0.2.4 Notes
 

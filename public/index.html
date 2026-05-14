@@ -80,7 +80,7 @@
             #channelSidebarHeader {
                 display: flex;
                 justify-content: space-between;
-                align-items: baseline;
+                align-items: center;
                 gap: 10px;
             }
 
@@ -227,6 +227,29 @@
                 margin: 8px 0 7px;
                 color: #777;
                 font-size: 0.72rem;
+                cursor: pointer;
+                user-select: none;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .channelSection h3::before {
+                content: "▾";
+                font-size: 0.65rem;
+                transition: transform 0.15s;
+                display: inline-block;
+            }
+
+            .channelSection.collapsed h3::before {
+                transform: rotate(-90deg);
+            }
+
+            .channelSection.collapsed > *:not(h3) {
+                display: none !important;
+            }
+
+            .channelSection h3 {
                 text-transform: uppercase;
                 letter-spacing: 1px;
             }
@@ -1669,13 +1692,174 @@
                even if the user has scrolled. 'inset: 0' is shorthand
                for top/right/bottom/left all set to 0.
                ============================================================ */
-            #authOverlay,
-            #emailOverlay {
-                display: none;               /* Hidden by default — auth.js shows it if needed */
+            #authOverlay {
+                display: none;
                 position: fixed;
-                inset: 0;                    /* Cover the entire viewport */
+                inset: 0;
+                background: #0c0c0c;
+                background-image:
+                    radial-gradient(ellipse at 25% 60%, rgba(76,175,80,0.07) 0%, transparent 55%),
+                    radial-gradient(ellipse at 75% 25%, rgba(76,175,80,0.04) 0%, transparent 50%);
+                z-index: 1000;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 28px;
+                overflow-y: auto;
+                padding: 24px;
+            }
+
+            #authLanding {
+                text-align: center;
+            }
+
+            #authLanding h1 {
+                margin: 0 0 10px;
+                font-size: clamp(2rem, 6vw, 3.4rem);
+                color: #4caf50;
+                letter-spacing: 6px;
+                text-transform: uppercase;
+                text-shadow: 0 0 40px rgba(76,175,80,0.35);
+            }
+
+            #authLanding .tagline {
+                color: #888;
+                font-size: clamp(0.8rem, 2vw, 1rem);
+                letter-spacing: 2px;
+                margin: 0 0 14px;
+            }
+
+            #authLanding .landingBadges {
+                display: flex;
+                gap: 10px;
+                justify-content: center;
+                flex-wrap: wrap;
+                margin-bottom: 18px;
+            }
+
+            #authLanding .comingSoonBadge,
+            #authLanding .inviteOnlyBadge {
+                display: inline-block;
+                padding: 4px 14px;
+                border-radius: 20px;
+                font-size: 0.68rem;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+            }
+
+            #authLanding .comingSoonBadge {
+                border: 1px solid #2e7d32;
+                color: #4caf50;
+            }
+
+            #authLanding .inviteOnlyBadge {
+                border: 1px solid #4a3a6e;
+                color: #b39ddb;
+            }
+
+            #authLanding .landingContact {
+                margin: 0;
+            }
+
+            #authLanding .landingContact button {
+                background: none;
+                border: none;
+                color: #555;
+                font-size: 0.75rem;
+                cursor: pointer;
+                padding: 0;
+                letter-spacing: 0.5px;
+                transition: color 0.15s;
+            }
+
+            #authLanding .landingContact button:hover {
+                color: #888;
+            }
+
+            .authMeta {
+                margin: 2px 0 0;
+                text-align: right;
+            }
+
+            .authMeta button {
+                background: none;
+                border: none;
+                color: #4caf50;
+                font-size: 0.75rem;
+                cursor: pointer;
+                padding: 0;
+                transition: color 0.15s;
+            }
+
+            .authMeta button:hover {
+                color: #81c784;
+            }
+
+            #contactOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
                 background: rgba(0, 0, 0, 0.88);
-                z-index: 1000;               /* Sit above all other content */
+                z-index: 1100;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+            }
+
+            #contactCard {
+                position: relative;
+                background: #1e1e1e;
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 36px 32px;
+                width: 360px;
+                max-width: 100%;
+                box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+            }
+
+            #contactCard h2 {
+                margin: 0 0 6px;
+                font-size: 1.4rem;
+                color: #eee;
+            }
+
+            #contactCard p.subtitle {
+                margin: 0 0 22px;
+                color: #666;
+                font-size: 0.82rem;
+            }
+
+            #contactCloseBtn {
+                position: absolute;
+                top: 14px;
+                right: 16px;
+                background: none;
+                border: none;
+                color: #555;
+                font-size: 1.3rem;
+                cursor: pointer;
+                line-height: 1;
+                padding: 2px 6px;
+                transition: color 0.15s;
+            }
+
+            #contactCloseBtn:hover { color: #aaa; }
+
+            #contactSuccess {
+                display: none;
+                text-align: center;
+                padding: 16px 0 8px;
+                color: #81c784;
+                font-size: 0.9rem;
+                line-height: 1.5;
+            }
+
+            #emailOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.88);
+                z-index: 1000;
                 align-items: center;
                 justify-content: center;
             }
@@ -1720,29 +1904,7 @@
                 transform: scale(1.03);
             }
 
-            /* ============================================================
-               Auth Card Close Button
-               Sits in the top-right corner of the auth card.
-               ============================================================ */
-            #authClose {
-                position: absolute;
-                top: 14px;
-                right: 16px;
-                background: none;
-                border: none;
-                color: #888;
-                font-size: 1.3rem;
-                cursor: pointer;
-                line-height: 1;
-                transition: color 0.2s;
-            }
-
-            #authClose:hover {
-                color: white;
-            }
-
-            /* authCard needs position: relative so #authClose can anchor to it */
-            /* The white card in the centre of the overlay */
+            /* The card in the centre of the overlay */
             #authCard,
             #emailCard {
                 position: relative;
@@ -1816,8 +1978,10 @@
                 color: #aaa;
             }
 
-            /* Text/password inputs */
-            .authForm input {
+            /* Text/password inputs, selects, and textarea */
+            .authForm input,
+            .authForm select,
+            .authForm textarea {
                 padding: 10px 12px;
                 background: #2b2b2b;
                 border: 1px solid #444;
@@ -1829,8 +1993,16 @@
             }
 
             /* Highlight the border when the field is focused */
-            .authForm input:focus {
+            .authForm input:focus,
+            .authForm select:focus,
+            .authForm textarea:focus {
                 border-color: #4caf50;
+            }
+
+            .authForm textarea {
+                resize: vertical;
+                min-height: 90px;
+                font-family: inherit;
             }
 
             /* Submit button — full width, green */
@@ -2813,10 +2985,7 @@
              Visible to unauthenticated visitors. Clicking the button
              opens the auth overlay. auth.js hides this on successful login.
              ============================================================ -->
-        <div id="spectatorBanner">
-            <span>JOIN IN ON THE FUN! REGISTER OR LOGIN NOW!</span>
-            <button onclick="window.showAuthOverlay()">SIGN UP / LOG IN</button>
-        </div>
+        <div id="spectatorBanner" style="display:none;"></div>
 
         <!-- ============================================================
              Auth Overlay
@@ -2824,13 +2993,18 @@
              auth.js controls its visibility and wires up the forms.
              ============================================================ -->
         <div id="authOverlay">
+
+            <div id="authLanding">
+                <h1>OpenRealm</h1>
+                <p class="tagline">Where Communities Become Worlds</p>
+                <div class="landingBadges">
+                    <span class="comingSoonBadge">Coming Soon</span>
+                    <span class="inviteOnlyBadge">&#128274; Invite Only</span>
+                </div>
+                <p class="landingContact"><button type="button" onclick="window.showContactOverlay()">Contact &amp; Bug Reports</button></p>
+            </div>
+
             <div id="authCard">
-
-                <!-- Close button — returns the visitor to spectator mode -->
-                <button id="authClose" onclick="document.getElementById('authOverlay').style.display='none'" title="Close">✕</button>
-
-                <h2>OpenRealm</h2>
-                <p class="subtitle">Sign in to enter the world</p>
 
                 <!-- Tab buttons — switch between Login and Register views -->
                 <div id="authTabs">
@@ -2842,7 +3016,7 @@
                 <form class="authForm" id="formLogin" style="display: flex;">
                     <label>
                         Username or Email
-                        <input type="text"     id="loginUsername" autocomplete="username"     required maxlength="254" />
+                        <input type="text"     id="loginUsername" autocomplete="username"         required maxlength="254" />
                     </label>
                     <label>
                         Password
@@ -2855,20 +3029,25 @@
                 <!-- Register Form — hidden until the Register tab is clicked -->
                 <form class="authForm" id="formRegister">
                     <label>
+                        Invite Code
+                        <input type="text"     id="regInviteCode" autocomplete="off"          required maxlength="64" placeholder="Enter your invite code" />
+                    </label>
+                    <p class="authMeta"><button type="button" onclick="window.showContactOverlay('invite')">Don't have a code? Request one &rarr;</button></p>
+                    <label>
                         Username
-                        <input type="text"     id="regUsername"  autocomplete="username"     required maxlength="20" />
+                        <input type="text"     id="regUsername"   autocomplete="username"      required maxlength="20" />
                     </label>
                     <label>
                         Email
-                        <input type="email"    id="regEmail"     autocomplete="email"        required maxlength="254" />
+                        <input type="email"    id="regEmail"      autocomplete="email"         required maxlength="254" />
                     </label>
                     <label>
                         Password
-                        <input type="password" id="regPassword"  autocomplete="new-password" required />
+                        <input type="password" id="regPassword"   autocomplete="new-password"  required />
                     </label>
                     <label>
                         Confirm Password
-                        <input type="password" id="regPassword2" autocomplete="new-password" required />
+                        <input type="password" id="regPassword2"  autocomplete="new-password"  required />
                     </label>
                     <p class="authError" id="errorRegister"></p>
                     <button type="submit">Create Account</button>
@@ -2889,6 +3068,41 @@
                     <p class="authError" id="emailCaptureError"></p>
                     <button type="submit">Save Email</button>
                 </form>
+            </div>
+        </div>
+
+        <div id="contactOverlay">
+            <div id="contactCard">
+                <button id="contactCloseBtn" type="button" aria-label="Close">&times;</button>
+                <h2>Get in Touch</h2>
+                <p class="subtitle">Report a bug, leave feedback, or request an invite code.</p>
+                <form class="authForm" id="formContact" style="display: flex;">
+                    <label>
+                        Your Name <span style="color:#555;font-size:0.75rem;">(optional)</span>
+                        <input type="text"  id="contactName"    autocomplete="name"  maxlength="100" />
+                    </label>
+                    <label>
+                        Email
+                        <input type="email" id="contactEmail"   autocomplete="email" required maxlength="254" />
+                    </label>
+                    <label>
+                        Type
+                        <select id="contactType">
+                            <option value="bug">Bug Report</option>
+                            <option value="feedback">General Feedback</option>
+                            <option value="invite">Invite Code Request</option>
+                        </select>
+                    </label>
+                    <label>
+                        Message
+                        <textarea id="contactMessage" required maxlength="2000" rows="5" placeholder="Describe the bug, share feedback, or explain why you'd like an invite..."></textarea>
+                    </label>
+                    <p class="authError" id="contactError"></p>
+                    <button type="submit" id="contactSubmitBtn">Send</button>
+                </form>
+                <div id="contactSuccess">
+                    <p>&#10003; Message sent. We'll follow up at the email you provided.</p>
+                </div>
             </div>
         </div>
 
@@ -3023,7 +3237,7 @@
         </div>
 
         <footer id="siteFooter">
-            <span><strong>OpenRealm</strong> v0.2.4</span>
+            <span><strong>OpenRealm</strong> v0.2.5</span>
             <span>Created by <strong>YockMakesGames</strong></span>
         </footer>
 

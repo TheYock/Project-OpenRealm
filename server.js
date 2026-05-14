@@ -1681,6 +1681,20 @@ function movePlayerToRoom(socket, roomId, { announce = true, resetPosition = tru
     }
 }
 
+// Returns true if this socket is within the allowed rate for the given key.
+// Uses a sliding window: keeps timestamps of recent events and rejects
+// if more than maxEvents occurred within windowMs.
+function isRateLimited(socket, key, maxEvents, windowMs) {
+    const now = Date.now();
+    socket.data.rateLimits ||= {};
+    socket.data.rateLimits[key] ||= [];
+    const timestamps = socket.data.rateLimits[key];
+    while (timestamps.length && now - timestamps[0] > windowMs) timestamps.shift();
+    if (timestamps.length >= maxEvents) return true;
+    timestamps.push(now);
+    return false;
+}
+
 io.on("connection", (socket) => {
     console.log("Player connected:", socket.id);
     ensureDefaultWorldInMemory();
@@ -2182,7 +2196,7 @@ io.on("connection", (socket) => {
                 socket.data.channelId = channel.id;
                 socket.emit("channelChanged", { channel: publicChannel(channel, socket) });
                 socket.emit("roomList", publicRoomsForSocket(socket, channel.id));
-                socket.emit("channelError", { message: "Channel saved. It has no rooms yet." });
+                socket.emit("channelSuccess", { message: "Channel saved. It has no rooms yet." });
             }
         } catch (e) {
             if (e.code === "CHANNEL_BANNED") {
@@ -2293,7 +2307,7 @@ io.on("connection", (socket) => {
                 }
             });
 
-            socket.emit("channelError", { message: "Channel settings saved.", ok: true });
+            socket.emit("channelSuccess", { message: "Channel settings saved." });
             broadcastChannelList();
             broadcastRoomList();
         } catch (e) {
@@ -2472,6 +2486,12 @@ io.on("connection", (socket) => {
                 await ChannelMember.deleteOne({ _id: targetMembershipDoc._id });
                 await removeFavoriteChannelForUser(target.userId, channel.id);
                 await refreshChannelMemberCount(channel.id);
+
+                const kickedSocket = findOnlineSocketByUserId(target.userId);
+                if (kickedSocket?.data.channelMemberships) {
+                    delete kickedSocket.data.channelMemberships[channel.id];
+                }
+
                 await moveUserOutOfChannel(
                     target.userId,
                     channel,
@@ -2502,6 +2522,12 @@ io.on("connection", (socket) => {
 
                 await removeFavoriteChannelForUser(target.userId, channel.id);
                 await refreshChannelMemberCount(channel.id);
+
+                const bannedSocket = findOnlineSocketByUserId(target.userId);
+                if (bannedSocket?.data.channelMemberships) {
+                    bannedSocket.data.channelMemberships[channel.id] = bannedMembership;
+                }
+
                 await moveUserOutOfChannel(
                     target.userId,
                     channel,
@@ -2601,7 +2627,7 @@ io.on("connection", (socket) => {
                 });
             }
 
-            socket.emit("channelError", { message: `${membership.username} was unbanned from ${channel.name}.` });
+            socket.emit("channelSuccess", { message: `${membership.username} was unbanned from ${channel.name}.` });
             await sendChannelBanList(socket, channel);
             broadcastChannelList();
         } catch (e) {
@@ -2722,7 +2748,7 @@ io.on("connection", (socket) => {
                 message: `${players[socket.id]?.name || "A channel admin"} updated ${roomName}`
             });
 
-            socket.emit("roomError", { message: "Room settings saved.", ok: true });
+            socket.emit("roomSuccess", { message: "Room settings saved." });
             broadcastRoomList();
             broadcastChannelList();
         } catch (e) {
@@ -2752,6 +2778,14 @@ io.on("connection", (socket) => {
         }
         if (!canManageRooms(socket, channel)) {
             socket.emit("roomError", { message: "Only the channel owner can create rooms here." });
+            return;
+        }
+
+        const nameConflict = Object.values(rooms).some(
+            r => r.channelId === channel.id && r.name.toLowerCase() === roomName.toLowerCase()
+        );
+        if (nameConflict) {
+            socket.emit("roomError", { message: `A room named "${roomName}" already exists in this channel.` });
             return;
         }
 
@@ -2815,6 +2849,10 @@ io.on("connection", (socket) => {
                 s => players[s.id]?.roomId === room.id
             );
 
+            const movedNames = socketsToMove
+                .map(s => players[s.id]?.name)
+                .filter(Boolean);
+
             socketsToMove.forEach((roomSocket) => {
                 movePlayerToRoom(roomSocket, fallbackRoomId, { announce: false });
                 roomSocket.emit("roomClosed", { message: `${room.name} was closed.` });
@@ -2825,6 +2863,14 @@ io.on("connection", (socket) => {
                 name: "System",
                 message: `${players[socket.id]?.name || "A moderator"} closed ${room.name}`
             });
+            if (movedNames.length > 0) {
+                const nameList = movedNames.join(", ");
+                const verb = movedNames.length === 1 ? "was" : "were";
+                io.to(roomChannel(fallbackRoomId)).emit("chatMessage", {
+                    name: "System",
+                    message: `${nameList} ${verb} moved here from ${room.name}`
+                });
+            }
             broadcastRoomList();
             broadcastChannelList();
         } catch (e) {
@@ -2844,6 +2890,8 @@ io.on("connection", (socket) => {
     // all other players so their screens stay in sync.
     socket.on("playerMove", (data) => {
         // Guard: make sure this socket has a registered player and is not frozen.
+        // Rate limit: max 20 position updates per second.
+        if (isRateLimited(socket, "move", 20, 1000)) return;
         if (players[socket.id] && !players[socket.id].frozen) {
             // Clamp the incoming coordinates to valid world bounds,
             // just like we did in "join" — clients could send anything.
@@ -2872,6 +2920,8 @@ io.on("connection", (socket) => {
         // Guard: ignore messages from sockets that haven't joined or are muted.
         if (!players[socket.id]) return;
         if (players[socket.id].muted) return;
+        // Rate limit: max 5 messages per 5 seconds.
+        if (isRateLimited(socket, "chat", 5, 5000)) return;
 
         // Sanitize the message: must be a string, trimmed, max 200 characters.
         // This prevents spam, XSS attempts, or oversized payloads.

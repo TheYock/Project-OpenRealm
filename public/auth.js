@@ -42,18 +42,15 @@ const savedToken    = localStorage.getItem(TOKEN_KEY);
 const savedUsername = localStorage.getItem(USERNAME_KEY);
 
 if (savedToken && savedUsername) {
-    // We have a saved session — skip the overlay and enter the game.
-    // setTimeout(0) defers until after game.js has finished executing,
-    // ensuring window.joinGame is defined before we call it.
     setTimeout(() => {
-        document.getElementById("spectatorBanner").style.display = "none";
         showPlayerBar(savedUsername);
         window.enableChat();
         window.joinGame(savedUsername, savedToken);
     }, 0);
+} else {
+    // No session — show the landing/auth screen immediately.
+    overlay.style.display = "flex";
 }
-// If no session, do nothing — the player lands as a spectator.
-// They can open the overlay by clicking the banner button.
 
 // ============================================================
 // showAuthOverlay()
@@ -281,12 +278,12 @@ formRegister.addEventListener("submit", async (e) => {
     e.preventDefault();
     errorRegister.textContent = "";
 
-    const username  = document.getElementById("regUsername").value.trim();
-    const email     = document.getElementById("regEmail").value.trim();
-    const password  = document.getElementById("regPassword").value;
-    const password2 = document.getElementById("regPassword2").value;
+    const inviteCode = document.getElementById("regInviteCode").value.trim();
+    const username   = document.getElementById("regUsername").value.trim();
+    const email      = document.getElementById("regEmail").value.trim();
+    const password   = document.getElementById("regPassword").value;
+    const password2  = document.getElementById("regPassword2").value;
 
-    // Client-side check before even hitting the server.
     if (password !== password2) {
         errorRegister.textContent = "Passwords do not match";
         return;
@@ -296,7 +293,7 @@ formRegister.addEventListener("submit", async (e) => {
     btn.disabled    = true;
     btn.textContent = "Creating account...";
 
-    const { ok, data } = await postJSON("/api/register", { username, email, password });
+    const { ok, data } = await postJSON("/api/register", { username, email, password, inviteCode });
 
     if (ok) {
         enterGame(data.token, data.user.username, data.user, {

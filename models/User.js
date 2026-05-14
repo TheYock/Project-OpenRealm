@@ -93,15 +93,10 @@ const userSchema = new mongoose.Schema({
     },
 
     // Avatar customization options.
-    // 'default' means these values are used automatically if not provided.
     avatar: {
         color: {
             type: String,
             default: "#4caf50"  // Default player color (green)
-        },
-        shape: {
-            type: String,
-            default: "square"   // Reserved for future shape options
         }
     }
 

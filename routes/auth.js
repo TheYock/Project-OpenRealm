@@ -13,8 +13,10 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
-const { sendVerificationEmail } = require("../services/email");
+const User              = require("../models/User");
+const InviteCode        = require("../models/InviteCode");
+const ContactSubmission = require("../models/ContactSubmission");
+const { sendVerificationEmail, sendContactNotification } = require("../services/email");
 
 // express.Router() creates a mini app that handles a group of
 // related routes. We mount it in server.js under "/api".
@@ -185,12 +187,22 @@ function publicUser(user) {
 // ============================================================
 // POST /api/register
 // ============================================================
-// Expects: { username, email, password }
+// Expects: { username, email, password, inviteCode }
 // Returns: { token, user: { id, username, avatar } }
 router.post("/register", async (req, res) => {
     try {
         const { username, password } = req.body;
-        const email = normalizeEmail(req.body.email);
+        const email      = normalizeEmail(req.body.email);
+        const inviteCode = typeof req.body.inviteCode === "string" ? req.body.inviteCode.trim() : "";
+
+        // --- Invite code check ---
+        if (!inviteCode) {
+            return res.status(403).json({ error: "An invite code is required to create an account." });
+        }
+        const invite = await InviteCode.findOne({ code: inviteCode });
+        if (!invite || (invite.maxUses !== -1 && invite.uses >= invite.maxUses)) {
+            return res.status(403).json({ error: "Invalid or expired invite code." });
+        }
 
         // --- Validation ---
         if (!username || !email || !password) {
@@ -238,6 +250,7 @@ router.post("/register", async (req, res) => {
         });
 
         await user.save();
+        await InviteCode.updateOne({ _id: invite._id }, { $inc: { uses: 1 } });
         const verificationDelivery = await issueEmailVerification(user, req);
 
         // --- Sign a JWT ---
@@ -431,6 +444,35 @@ router.get("/verify-email", async (req, res) => {
             "Something went wrong while verifying this email. Please try again.",
             false
         ));
+    }
+});
+
+// ============================================================
+// POST /api/contact
+// ============================================================
+// Open to anyone (no auth required). Saves a contact submission
+// and optionally emails a notification to ADMIN_EMAIL.
+router.post("/contact", async (req, res) => {
+    try {
+        const name    = typeof req.body.name    === "string" ? req.body.name.trim().slice(0, 100)    : "";
+        const email   = normalizeEmail(req.body.email);
+        const type    = ["bug", "feedback", "invite"].includes(req.body.type) ? req.body.type : "feedback";
+        const message = typeof req.body.message === "string" ? req.body.message.trim().slice(0, 2000) : "";
+
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ error: "A valid email is required." });
+        }
+        if (!message) {
+            return res.status(400).json({ error: "Message is required." });
+        }
+
+        await ContactSubmission.create({ name, email, type, message });
+        await sendContactNotification({ name, email, type, message });
+
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("Contact submission error:", err);
+        res.status(500).json({ error: "Server error. Please try again." });
     }
 });
 

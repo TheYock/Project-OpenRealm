@@ -45,6 +45,88 @@ function getCanvasPoint(e) {
 // --- Chat UI Elements ---
 // These are HTML elements defined in index.html that make up the chat UI.
 const chatMessages = document.getElementById("chatMessages");
+// --- Sidebar section collapse ---
+// Each .channelSection h3 toggles its parent section's .collapsed class.
+// State is saved per-section in localStorage using the h3's text as the key.
+document.querySelectorAll(".channelSection h3").forEach(h3 => {
+    const section = h3.closest(".channelSection");
+    const key = "or_section_" + h3.textContent.trim().toLowerCase().replace(/\s+/g, "_");
+    if (localStorage.getItem(key)) section.classList.add("collapsed");
+    h3.addEventListener("click", () => {
+        section.classList.toggle("collapsed");
+        localStorage.setItem(key, section.classList.contains("collapsed") ? "1" : "");
+    });
+});
+
+// --- Contact Modal ---
+(function () {
+    const overlay      = document.getElementById("contactOverlay");
+    const closeBtn     = document.getElementById("contactCloseBtn");
+    const form         = document.getElementById("formContact");
+    const typeSelect   = document.getElementById("contactType");
+    const errorEl      = document.getElementById("contactError");
+    const successEl    = document.getElementById("contactSuccess");
+    const submitBtn    = document.getElementById("contactSubmitBtn");
+
+    function openContact(type) {
+        overlay.style.display = "flex";
+        form.style.display    = "flex";
+        successEl.style.display = "none";
+        errorEl.textContent   = "";
+        submitBtn.disabled    = false;
+        submitBtn.textContent = "Send";
+        if (type && typeSelect) typeSelect.value = type;
+    }
+
+    function closeContact() {
+        overlay.style.display = "none";
+        form.reset();
+    }
+
+    window.showContactOverlay = openContact;
+
+    if (closeBtn) closeBtn.addEventListener("click", closeContact);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeContact(); });
+
+    if (form) {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            errorEl.textContent = "";
+            submitBtn.disabled    = true;
+            submitBtn.textContent = "Sending...";
+
+            const body = {
+                name:    document.getElementById("contactName").value.trim(),
+                email:   document.getElementById("contactEmail").value.trim(),
+                type:    typeSelect.value,
+                message: document.getElementById("contactMessage").value.trim()
+            };
+
+            try {
+                const res  = await fetch("/api/contact", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    form.style.display    = "none";
+                    successEl.style.display = "block";
+                } else {
+                    errorEl.textContent   = data.error || "Something went wrong.";
+                    submitBtn.disabled    = false;
+                    submitBtn.textContent = "Send";
+                }
+            } catch {
+                errorEl.textContent   = "Network error. Please try again.";
+                submitBtn.disabled    = false;
+                submitBtn.textContent = "Send";
+            }
+        });
+    }
+}());
+
+
 const chatInput = document.getElementById("chatInput");
 const sendButton = document.getElementById("sendButton");
 const currentChannelNameEl = document.getElementById("currentChannelName");
@@ -2340,9 +2422,17 @@ socket.on("roomChanged", ({ room } = {}) => {
 
 socket.on("channelError", (data = {}) => {
     channelBrowserPendingAction = "";
-    setChannelError(data.message || "Channel action failed.", data.ok !== true);
+    setChannelError(data.message || "Channel action failed.", true);
     if (manageOverlay.classList.contains("open") && manageTab === "channel") {
-        setManageStatus(data.message || "Channel action failed.", data.ok !== true);
+        setManageStatus(data.message || "Channel action failed.", true);
+    }
+});
+
+socket.on("channelSuccess", (data = {}) => {
+    channelBrowserPendingAction = "";
+    setChannelError(data.message || "Done.", false);
+    if (manageOverlay.classList.contains("open") && manageTab === "channel") {
+        setManageStatus(data.message || "Done.", false);
     }
 });
 
@@ -2373,9 +2463,16 @@ socket.on("channelBanList", ({ channelId, bans } = {}) => {
 });
 
 socket.on("roomError", (data = {}) => {
-    setRoomError(data.message || "Room action failed.", data.ok !== true);
+    setRoomError(data.message || "Room action failed.", true);
     if (manageOverlay.classList.contains("open") && manageTab === "room") {
-        setManageStatus(data.message || "Room action failed.", data.ok !== true);
+        setManageStatus(data.message || "Room action failed.", true);
+    }
+});
+
+socket.on("roomSuccess", (data = {}) => {
+    setRoomError(data.message || "Done.", false);
+    if (manageOverlay.classList.contains("open") && manageTab === "room") {
+        setManageStatus(data.message || "Done.", false);
     }
 });
 
