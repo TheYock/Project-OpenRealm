@@ -23,7 +23,15 @@ const formLogin     = document.getElementById("formLogin");
 const formRegister  = document.getElementById("formRegister");
 const errorLogin    = document.getElementById("errorLogin");
 const errorRegister = document.getElementById("errorRegister");
-const emailOverlay  = document.getElementById("emailOverlay");
+const emailOverlay       = document.getElementById("emailOverlay");
+const forgotPanel        = document.getElementById("forgotPanel");
+const formForgot         = document.getElementById("formForgot");
+const errorForgot        = document.getElementById("errorForgot");
+const forgotSuccess      = document.getElementById("forgotSuccess");
+const forgotSubmitBtn    = document.getElementById("forgotSubmitBtn");
+const forgotPasswordLink = document.getElementById("forgotPasswordLink");
+const backToLoginBtn     = document.getElementById("backToLoginBtn");
+const authTabs           = document.getElementById("authTabs");
 const emailCaptureForm = document.getElementById("emailCaptureForm");
 const emailCaptureInput = document.getElementById("emailCaptureInput");
 const emailCaptureError = document.getElementById("emailCaptureError");
@@ -69,31 +77,75 @@ window.showAuthOverlay = function() {
 // Clicking a tab shows its form and hides the other.
 // ============================================================
 tabLogin.addEventListener("click", () => {
-    // Activate the Login tab visually
     tabLogin.classList.add("active");
     tabRegister.classList.remove("active");
-
-    // Show the login form, hide the register form
     formLogin.style.display    = "flex";
     formRegister.style.display = "none";
-
-    // Clear any leftover error messages
-    errorLogin.textContent    = "";
-    errorRegister.textContent = "";
+    forgotPanel.style.display  = "none";
+    authTabs.style.display     = "";
+    errorLogin.textContent     = "";
+    errorRegister.textContent  = "";
 });
 
 tabRegister.addEventListener("click", () => {
-    // Activate the Register tab visually
     tabRegister.classList.add("active");
     tabLogin.classList.remove("active");
-
-    // Show the register form, hide the login form
     formRegister.style.display = "flex";
     formLogin.style.display    = "none";
-
-    errorLogin.textContent    = "";
-    errorRegister.textContent = "";
+    forgotPanel.style.display  = "none";
+    authTabs.style.display     = "";
+    errorLogin.textContent     = "";
+    errorRegister.textContent  = "";
 });
+
+// ============================================================
+// Forgot Password Panel
+// ============================================================
+function showForgotPanel() {
+    authTabs.style.display    = "none";
+    formLogin.style.display   = "none";
+    formRegister.style.display = "none";
+    forgotPanel.style.display = "block";
+    forgotSuccess.style.display = "none";
+    formForgot.style.display  = "flex";
+    errorForgot.textContent   = "";
+    document.getElementById("forgotEmail").value = "";
+    forgotSubmitBtn.disabled    = false;
+    forgotSubmitBtn.textContent = "Send Reset Link";
+}
+
+function hideForgotPanel() {
+    authTabs.style.display    = "";
+    formLogin.style.display   = "flex";
+    formRegister.style.display = "none";
+    tabLogin.classList.add("active");
+    tabRegister.classList.remove("active");
+    forgotPanel.style.display = "none";
+}
+
+if (forgotPasswordLink) forgotPasswordLink.addEventListener("click", showForgotPanel);
+if (backToLoginBtn)     backToLoginBtn.addEventListener("click", hideForgotPanel);
+
+if (formForgot) {
+    formForgot.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorForgot.textContent     = "";
+        forgotSubmitBtn.disabled    = true;
+        forgotSubmitBtn.textContent = "Sending...";
+
+        const email = document.getElementById("forgotEmail").value.trim();
+        const { ok, data } = await postJSON("/api/forgot-password", { email });
+
+        if (ok) {
+            formForgot.style.display    = "none";
+            forgotSuccess.style.display = "block";
+        } else {
+            errorForgot.textContent     = data.error || "Something went wrong.";
+            forgotSubmitBtn.disabled    = false;
+            forgotSubmitBtn.textContent = "Send Reset Link";
+        }
+    });
+}
 
 // ============================================================
 // Shared Helper: Enter the Game After Auth

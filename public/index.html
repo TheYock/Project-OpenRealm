@@ -1795,6 +1795,26 @@
                 color: #81c784;
             }
 
+            #forgotPanel .forgotTitle {
+                margin: 0 0 4px;
+                font-size: 1.1rem;
+                font-weight: bold;
+                color: #eee;
+            }
+
+            #forgotPanel .forgotSub {
+                margin: 0 0 18px;
+                font-size: 0.8rem;
+                color: #666;
+            }
+
+            #forgotPanel .forgotSuccess {
+                font-size: 0.85rem;
+                color: #81c784;
+                line-height: 1.5;
+                margin: 0;
+            }
+
             #contactOverlay {
                 display: none;
                 position: fixed;
@@ -3024,7 +3044,24 @@
                     </label>
                     <p class="authError" id="errorLogin"></p>
                     <button type="submit">Log In</button>
+                    <p class="authMeta"><button type="button" id="forgotPasswordLink">Forgot password?</button></p>
                 </form>
+
+                <!-- Forgot Password panel — shown instead of the forms -->
+                <div id="forgotPanel" style="display:none;">
+                    <p class="forgotTitle">Reset Password</p>
+                    <p class="forgotSub">Enter your account email and we'll send a reset link.</p>
+                    <form class="authForm" id="formForgot" style="display:flex;">
+                        <label>
+                            Email
+                            <input type="email" id="forgotEmail" autocomplete="email" required maxlength="254" />
+                        </label>
+                        <p class="authError" id="errorForgot"></p>
+                        <button type="submit" id="forgotSubmitBtn">Send Reset Link</button>
+                    </form>
+                    <p class="forgotSuccess" id="forgotSuccess" style="display:none;">Check your inbox — if that email is registered, a reset link is on its way.</p>
+                    <p class="authMeta" style="margin-top:14px;text-align:center;"><button type="button" id="backToLoginBtn">&larr; Back to Log In</button></p>
+                </div>
 
                 <!-- Register Form — hidden until the Register tab is clicked -->
                 <form class="authForm" id="formRegister">

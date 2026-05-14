@@ -88,6 +88,87 @@ app.use(express.static(path.join(__dirname, "public")));
 // Any request to /api/register or /api/login will be handled by routes/auth.js.
 app.use("/api", authRoutes);
 
+// Password reset page — served when the user clicks the link in their email.
+app.get("/reset-password", (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+    const accent = "#4caf50";
+    res.send(`<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Reset Password - OpenRealm</title>
+        <style>
+            *, *::before, *::after { box-sizing: border-box; }
+            body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #151515; color: #f5f5f5; font-family: Arial, sans-serif; }
+            main { width: min(92vw, 400px); padding: 36px 32px; border: 1px solid #333; border-radius: 12px; background: #1f1f1f; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+            h1 { margin: 0 0 6px; font-size: 1.5rem; color: ${accent}; }
+            p.sub { margin: 0 0 22px; color: #666; font-size: 0.82rem; }
+            label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: #aaa; margin-bottom: 14px; }
+            input { padding: 10px 12px; background: #2b2b2b; border: 1px solid #444; border-radius: 6px; color: #f5f5f5; font-size: 0.95rem; outline: none; }
+            input:focus { border-color: ${accent}; }
+            button { width: 100%; margin-top: 6px; padding: 12px; background: ${accent}; border: none; border-radius: 6px; color: white; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+            button:hover:not(:disabled) { background: #45a049; }
+            button:disabled { opacity: 0.6; cursor: not-allowed; }
+            .msg { margin: 10px 0 0; font-size: 0.85rem; min-height: 18px; }
+            .msg.error { color: #e57373; }
+            .msg.success { color: #81c784; }
+            a.back { display: inline-block; margin-top: 18px; font-size: 0.8rem; color: #555; text-decoration: none; }
+            a.back:hover { color: #888; }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>Reset Password</h1>
+            <p class="sub">Choose a new password for your OpenRealm account.</p>
+            <form id="resetForm">
+                <input type="hidden" id="resetToken" value="${token.replace(/"/g, "&quot;")}" />
+                <label>
+                    New Password
+                    <input type="password" id="newPassword" autocomplete="new-password" required minlength="6" />
+                </label>
+                <label>
+                    Confirm Password
+                    <input type="password" id="confirmPassword" autocomplete="new-password" required minlength="6" />
+                </label>
+                <p class="msg error" id="errorMsg"></p>
+                <button type="submit" id="submitBtn">Set New Password</button>
+            </form>
+            <p class="msg success" id="successMsg" style="display:none;">Password updated! <a href="/">Return to OpenRealm</a></p>
+            <a class="back" href="/">&larr; Back to OpenRealm</a>
+        </main>
+        <script>
+            document.getElementById("resetForm").addEventListener("submit", async function(e) {
+                e.preventDefault();
+                var errorEl  = document.getElementById("errorMsg");
+                var successEl = document.getElementById("successMsg");
+                var btn      = document.getElementById("submitBtn");
+                var password = document.getElementById("newPassword").value;
+                var confirm  = document.getElementById("confirmPassword").value;
+                var token    = document.getElementById("resetToken").value;
+                errorEl.textContent = "";
+                if (password !== confirm) { errorEl.textContent = "Passwords do not match."; return; }
+                btn.disabled = true; btn.textContent = "Saving...";
+                try {
+                    var res  = await fetch("/api/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token, password: password }) });
+                    var data = await res.json();
+                    if (res.ok) {
+                        document.getElementById("resetForm").style.display = "none";
+                        successEl.style.display = "block";
+                    } else {
+                        errorEl.textContent = data.error || "Something went wrong.";
+                        btn.disabled = false; btn.textContent = "Set New Password";
+                    }
+                } catch(err) {
+                    errorEl.textContent = "Network error. Please try again.";
+                    btn.disabled = false; btn.textContent = "Set New Password";
+                }
+            });
+        </script>
+    </body>
+</html>`);
+});
+
 // --- Game State ---
 // A plain object used as a dictionary to track every connected player.
 // Keys are socket IDs (unique strings assigned by Socket.IO).

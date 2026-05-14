@@ -52,6 +52,16 @@ const userSchema = new mongoose.Schema({
         default: null
     },
 
+    passwordResetTokenHash: {
+        type: String,
+        default: null
+    },
+
+    passwordResetExpiresAt: {
+        type: Date,
+        default: null
+    },
+
     // We never store the plain-text password — only the bcrypt hash.
     // The actual hashing happens in the auth route before saving.
     password: {

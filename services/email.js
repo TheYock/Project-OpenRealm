@@ -116,6 +116,75 @@ async function sendVerificationEmail({ to, username, verificationUrl }) {
     }
 }
 
+function passwordResetEmailHtml({ username, resetUrl }) {
+    const safeUsername = escapeHtml(username);
+    const safeUrl = escapeHtml(resetUrl);
+
+    return `<!doctype html>
+<html>
+    <body style="margin:0;padding:0;background:#151515;color:#f5f5f5;font-family:Arial,sans-serif;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#151515;padding:32px 16px;">
+            <tr>
+                <td align="center">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#1f1f1f;border:1px solid #333;border-radius:12px;padding:28px;">
+                        <tr>
+                            <td>
+                                <h1 style="margin:0 0 12px;color:#4caf50;font-size:28px;">Reset your password</h1>
+                                <p style="margin:0 0 16px;color:#d8d8d8;line-height:1.5;">Hi ${safeUsername},</p>
+                                <p style="margin:0 0 22px;color:#bdbdbd;line-height:1.5;">We received a request to reset your OpenRealm password. Click the button below to choose a new one.</p>
+                                <p style="margin:0 0 24px;">
+                                    <a href="${safeUrl}" style="display:inline-block;background:#4caf50;color:#fff;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:6px;">Reset Password</a>
+                                </p>
+                                <p style="margin:0;color:#888;font-size:13px;line-height:1.45;">This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email — your password will not change.</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>`;
+}
+
+async function sendPasswordResetEmail({ to, username, resetUrl }) {
+    const client = getResendClient();
+
+    if (!client) {
+        console.log(`[password reset] ${username}: ${resetUrl}`);
+        return { sent: false, provider: "console" };
+    }
+
+    try {
+        const result = await client.emails.send({
+            from: process.env.EMAIL_FROM || DEFAULT_EMAIL_FROM,
+            to,
+            subject: "Reset your OpenRealm password",
+            html: passwordResetEmailHtml({ username, resetUrl }),
+            text: [
+                `Hi ${username},`,
+                "",
+                "We received a request to reset your OpenRealm password.",
+                "",
+                `Reset your password: ${resetUrl}`,
+                "",
+                "This link expires in 1 hour. If you did not request a password reset, you can safely ignore this email."
+            ].join("\n")
+        });
+
+        if (result?.error) {
+            throw new Error(result.error.message || "Resend rejected the request");
+        }
+
+        const id = result?.data?.id || result?.id || null;
+        console.log(`[password reset] sent to ${to}${id ? ` (${id})` : ""}`);
+        return { sent: true, provider: "resend", id };
+    } catch (error) {
+        console.error("Password reset send error:", error?.message || error);
+        console.log(`[password reset] ${username}: ${resetUrl}`);
+        return { sent: false, provider: "console" };
+    }
+}
+
 function contactNotificationHtml({ name, email, type, message }) {
     const safeN = escapeHtml(name || "Anonymous");
     const safeE = escapeHtml(email);
@@ -170,5 +239,6 @@ async function sendContactNotification({ name, email, type, message }) {
 
 module.exports = {
     sendVerificationEmail,
+    sendPasswordResetEmail,
     sendContactNotification
 };

@@ -16,12 +16,13 @@ const jwt = require("jsonwebtoken");
 const User              = require("../models/User");
 const InviteCode        = require("../models/InviteCode");
 const ContactSubmission = require("../models/ContactSubmission");
-const { sendVerificationEmail, sendContactNotification } = require("../services/email");
+const { sendVerificationEmail, sendPasswordResetEmail, sendContactNotification } = require("../services/email");
 
 // express.Router() creates a mini app that handles a group of
 // related routes. We mount it in server.js under "/api".
 const router = express.Router();
 const VERIFICATION_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TOKEN_LIFETIME_MS = 60 * 60 * 1000; // 1 hour
 
 function normalizeEmail(email) {
     return typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -444,6 +445,75 @@ router.get("/verify-email", async (req, res) => {
             "Something went wrong while verifying this email. Please try again.",
             false
         ));
+    }
+});
+
+// ============================================================
+// POST /api/forgot-password
+// ============================================================
+// Accepts an email address and sends a reset link if an account
+// exists. Always returns 200 so we don't reveal whether an email
+// is registered.
+router.post("/forgot-password", async (req, res) => {
+    try {
+        const email = normalizeEmail(req.body.email);
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ error: "A valid email is required." });
+        }
+
+        const user = await User.findOne({ email });
+        if (user) {
+            const token = crypto.randomBytes(32).toString("hex");
+            user.passwordResetTokenHash = hashVerificationToken(token);
+            user.passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_LIFETIME_MS);
+            await user.save();
+
+            const resetUrl = `${verificationBaseUrl(req)}/reset-password?token=${token}`;
+            await sendPasswordResetEmail({ to: user.email, username: user.username, resetUrl });
+        }
+
+        // Always respond the same way regardless of whether the email matched.
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("Forgot password error:", err);
+        res.status(500).json({ error: "Server error. Please try again." });
+    }
+});
+
+// ============================================================
+// POST /api/reset-password
+// ============================================================
+// Validates the reset token and updates the user's password.
+router.post("/reset-password", async (req, res) => {
+    try {
+        const token    = typeof req.body.token    === "string" ? req.body.token.trim()    : "";
+        const password = typeof req.body.password === "string" ? req.body.password        : "";
+
+        if (!token) {
+            return res.status(400).json({ error: "Reset token is missing." });
+        }
+        if (password.length < 6) {
+            return res.status(400).json({ error: "Password must be at least 6 characters." });
+        }
+
+        const user = await User.findOne({
+            passwordResetTokenHash: hashVerificationToken(token),
+            passwordResetExpiresAt: { $gt: new Date() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: "This reset link is invalid or has expired." });
+        }
+
+        user.password              = await bcrypt.hash(password, 10);
+        user.passwordResetTokenHash = null;
+        user.passwordResetExpiresAt = null;
+        await user.save();
+
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("Reset password error:", err);
+        res.status(500).json({ error: "Server error. Please try again." });
     }
 });
 

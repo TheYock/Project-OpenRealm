@@ -189,6 +189,8 @@ makeAdmin.js                Grants admin and creation privileges
 setRoomCreator.js           Grants/revokes creation privileges only
 makeInvite.js               Generates and lists invite codes
 ```
+## Version 0.2.6 Notes
+- Added reset password logic
 
 ## Version 0.2.5 Notes
 
