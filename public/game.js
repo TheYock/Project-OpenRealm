@@ -50,8 +50,17 @@ const sendButton = document.getElementById("sendButton");
 const currentChannelNameEl = document.getElementById("currentChannelName");
 const sidebarCurrentChannelNameEl = document.getElementById("sidebarCurrentChannelName");
 const favoriteChannelListEl = document.getElementById("favoriteChannelList");
+const memberChannelListEl = document.getElementById("memberChannelList");
+const channelBrowserButton = document.getElementById("channelBrowserButton");
+const channelBrowserOverlay = document.getElementById("channelBrowserOverlay");
+const channelBrowserClose = document.getElementById("channelBrowserClose");
 const channelBrowserSearch = document.getElementById("channelBrowserSearch");
-const publicChannelListEl = document.getElementById("publicChannelList");
+const channelBrowserSort = document.getElementById("channelBrowserSort");
+const channelBrowserUnjoinedToggle = document.getElementById("channelBrowserUnjoinedToggle");
+const channelBrowserActiveToggle = document.getElementById("channelBrowserActiveToggle");
+const channelBrowserRoomsToggle = document.getElementById("channelBrowserRoomsToggle");
+const channelBrowserStats = document.getElementById("channelBrowserStats");
+const channelBrowserResults = document.getElementById("channelBrowserResults");
 const channelHomeEl = document.getElementById("channelHome");
 const channelCreateForm = document.getElementById("channelCreateForm");
 const channelCreateInput = document.getElementById("channelCreateInput");
@@ -64,14 +73,25 @@ const channelCodeDisplay = document.getElementById("channelCodeDisplay");
 const channelError = document.getElementById("channelError");
 const channelTools = document.getElementById("channelTools");
 const channelDeleteButton = document.getElementById("channelDeleteButton");
+const channelBanListButton = document.getElementById("channelBanListButton");
+const channelBanPanel = document.getElementById("channelBanPanel");
 const currentRoomNameEl = document.getElementById("currentRoomName");
 const roomCreateForm = document.getElementById("roomCreateForm");
 const roomCreateInput = document.getElementById("roomCreateInput");
 const roomModeSelect = document.getElementById("roomModeSelect");
 const roomCreateDescription = document.getElementById("roomCreateDescription");
 const roomCreateButton = document.getElementById("roomCreateButton");
+const roomCustomizePanel = document.getElementById("roomCustomizePanel");
+const roomCustomizeMode = document.getElementById("roomCustomizeMode");
+const roomCustomizeFields = document.getElementById("roomCustomizeFields");
+const roomCustomizeButton = document.getElementById("roomCustomizeButton");
 const roomCloseButton = document.getElementById("roomCloseButton");
 const roomError = document.getElementById("roomError");
+const roomModePanel = document.getElementById("roomModePanel");
+const roomBarChannelInfoButton = document.getElementById("roomBarChannelInfoButton");
+const roomBarNewRoomButton = document.getElementById("roomBarNewRoomButton");
+const roomBarChannelSettingsButton = document.getElementById("roomBarChannelSettingsButton");
+const roomBarRoomSettingsButton = document.getElementById("roomBarRoomSettingsButton");
 const friendsButton = document.getElementById("friendsButton");
 const messagesButton = document.getElementById("messagesButton");
 const socialDrawer = document.getElementById("socialDrawer");
@@ -90,6 +110,29 @@ const dmMessages = document.getElementById("dmMessages");
 const dmForm = document.getElementById("dmForm");
 const dmInput = document.getElementById("dmInput");
 const dmSendButton = document.getElementById("dmSendButton");
+const manageOverlay = document.getElementById("manageOverlay");
+const manageTitle = document.getElementById("manageTitle");
+const manageClose = document.getElementById("manageClose");
+const manageStatus = document.getElementById("manageStatus");
+const channelSettingsTab = document.getElementById("channelSettingsTab");
+const roomSettingsTab = document.getElementById("roomSettingsTab");
+const channelSettingsPanel = document.getElementById("channelSettingsPanel");
+const roomSettingsPanel = document.getElementById("roomSettingsPanel");
+const channelSettingsForm = document.getElementById("channelSettingsForm");
+const channelSettingsName = document.getElementById("channelSettingsName");
+const channelSettingsDescription = document.getElementById("channelSettingsDescription");
+const channelSettingsPrivate = document.getElementById("channelSettingsPrivate");
+const channelSettingsCode = document.getElementById("channelSettingsCode");
+const settingsBanListButton = document.getElementById("settingsBanListButton");
+const settingsDeleteChannelButton = document.getElementById("settingsDeleteChannelButton");
+const settingsBanPanel = document.getElementById("settingsBanPanel");
+const roomSettingsForm = document.getElementById("roomSettingsForm");
+const roomSettingsName = document.getElementById("roomSettingsName");
+const roomSettingsDescription = document.getElementById("roomSettingsDescription");
+const roomSettingsMode = document.getElementById("roomSettingsMode");
+const roomSettingsFields = document.getElementById("roomSettingsFields");
+const roomSettingsSave = document.getElementById("roomSettingsSave");
+const settingsCloseRoomButton = document.getElementById("settingsCloseRoomButton");
 
 let channels = [];
 let rooms = [];
@@ -104,11 +147,22 @@ const expandedChannelIds = new Set(["openrealm"]);
 let expandedRoomInfoId = null;
 let selectedHomeChannelId = "openrealm";
 let channelBrowserQuery = "";
+let channelBrowserSortMode = "activity";
+let channelBrowserOnlyUnjoined = false;
+let channelBrowserOnlyActive = false;
+let channelBrowserOnlyRooms = false;
 let friends = [];
 let socialTab = "friends";
 let activeDmFriendId = null;
 const directMessageThreads = {};
 const unreadDirectMessages = {};
+let roomModeDefinitions = {};
+let manageTab = "channel";
+let settingsChannelId = null;
+let roomSettingsAction = "edit";
+let roomSettingsRoomId = null;
+let roomSettingsChannelId = null;
+let forceChannelHomeOpen = false;
 
 function canModerateCurrentChannel() {
     return isAdmin || !!currentChannel?.canModerate;
@@ -116,6 +170,26 @@ function canModerateCurrentChannel() {
 
 function canManageCurrentRooms() {
     return !!currentChannel?.canManageRooms;
+}
+
+function canManageCurrentChannel() {
+    return !!currentChannel?.canManage;
+}
+
+function roomModeDefinition(mode) {
+    return roomModeDefinitions[mode] || roomModeDefinitions.social || {
+        label: formatRoomMode(mode),
+        defaultConfig: {},
+        settings: []
+    };
+}
+
+function roomModeConfig(room = currentRoom) {
+    const definition = roomModeDefinition(room?.mode || "social");
+    return {
+        ...(definition.defaultConfig || {}),
+        ...((room?.modeConfig && typeof room.modeConfig === "object") ? room.modeConfig : {})
+    };
 }
 
 function setChatInputEnabled(enabled, placeholder) {
@@ -134,12 +208,78 @@ window.enableChat = function() {
     updateRoomControls();
 };
 
-function setRoomError(message) {
+function setRoomError(message, isError = true) {
     roomError.textContent = message || "";
+    roomError.classList.toggle("success", !!message && !isError);
 }
 
-function setChannelError(message) {
+function setChannelError(message, isError = true) {
     channelError.textContent = message || "";
+    channelError.classList.toggle("success", !!message && !isError);
+}
+
+function formatBanExpiry(ban) {
+    const expiresAt = Number(ban?.banExpiresAt);
+    if (!expiresAt) return "Permanent";
+    return `Until ${new Date(expiresAt).toLocaleString()}`;
+}
+
+function renderBanList(container, channelId, bans = []) {
+    container.replaceChildren();
+    container.style.display = "block";
+
+    if (!bans.length) {
+        const empty = document.createElement("p");
+        empty.className = "channelEmpty";
+        empty.textContent = "No active bans.";
+        container.appendChild(empty);
+        return;
+    }
+
+    bans.forEach((ban) => {
+        const row = document.createElement("div");
+        row.className = "banEntry";
+
+        const info = document.createElement("div");
+        const name = document.createElement("strong");
+        name.textContent = ban.username || "Unknown";
+        const meta = document.createElement("span");
+        meta.textContent = [
+            formatBanExpiry(ban),
+            ban.bannedByUsername ? `By ${ban.bannedByUsername}` : ""
+        ].filter(Boolean).join(" | ");
+        info.appendChild(name);
+        info.appendChild(meta);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Unban";
+        button.addEventListener("click", () => {
+            socket.emit("unbanChannelMember", {
+                channelId,
+                userId: ban.userId
+            });
+        });
+
+        row.appendChild(info);
+        row.appendChild(button);
+        container.appendChild(row);
+    });
+}
+
+function renderChannelBanList(channelId, bans = []) {
+    if (channelId !== currentChannelId) return;
+    renderBanList(channelBanPanel, channelId, bans);
+}
+
+function renderSettingsBanList(channelId, bans = []) {
+    if (channelId !== settingsChannelId) return;
+    renderBanList(settingsBanPanel, channelId, bans);
+}
+
+function setManageStatus(message, isError = false) {
+    manageStatus.textContent = message || "";
+    manageStatus.classList.toggle("error", !!isError);
 }
 
 function setSocialNotice(message, isError = false) {
@@ -170,6 +310,7 @@ function unreadTotal() {
 
 function updateSocialButtons() {
     const loggedIn = !!playerName && hasJoinedGame;
+    channelBrowserButton.disabled = !loggedIn;
     friendsButton.disabled = !loggedIn;
     messagesButton.disabled = !loggedIn;
     const unread = unreadTotal();
@@ -385,6 +526,25 @@ function openDirectMessageForPlayer(playerData) {
     return true;
 }
 
+function setActionButtonVisible(button, visible, disabled = false) {
+    button.style.display = visible ? "inline-flex" : "none";
+    button.disabled = disabled;
+}
+
+function updateRoomBarActions() {
+    const canUse = !!playerName && hasJoinedGame;
+    const canViewChannelInfo = !!currentChannel;
+    const canManageRooms = canUse && !!currentChannel?.canManageRooms;
+    const canManageChannelSettings = canUse && (!!currentChannel?.canManage || !!currentChannel?.canDelete);
+    const canManageRoomSettings = canUse && !!currentRoom && (!!currentRoom.canCustomize || !!currentRoom.canClose);
+
+    setActionButtonVisible(roomBarChannelInfoButton, canViewChannelInfo, !canViewChannelInfo);
+    roomBarChannelInfoButton.textContent = forceChannelHomeOpen ? "Hide Info" : "Channel Info";
+    setActionButtonVisible(roomBarNewRoomButton, canManageRooms, !canManageRooms);
+    setActionButtonVisible(roomBarChannelSettingsButton, canManageChannelSettings, !canManageChannelSettings);
+    setActionButtonVisible(roomBarRoomSettingsButton, canManageRoomSettings, !canManageRoomSettings);
+}
+
 function updateChannelControls() {
     const canUseChannels = !!playerName && hasJoinedGame;
     const canCreate = canUseChannels;
@@ -395,10 +555,19 @@ function updateChannelControls() {
     channelCodeInput.disabled = !canUseChannels;
     channelJoinCodeButton.disabled = !canUseChannels;
     const canDeleteCurrentChannel = canUseChannels && !!currentChannel?.canDelete;
-    channelTools.style.display = canDeleteCurrentChannel ? "block" : "none";
+    const canManageModeration = canUseChannels && canManageCurrentChannel();
+    const canUseChannelTools = canDeleteCurrentChannel || canManageModeration;
+    channelTools.style.display = canUseChannelTools ? "block" : "none";
     channelDeleteButton.style.display = canDeleteCurrentChannel ? "block" : "none";
     channelDeleteButton.disabled = !canDeleteCurrentChannel;
+    channelBanListButton.style.display = canManageModeration ? "block" : "none";
+    channelBanListButton.disabled = !canManageModeration;
+    if (!canManageModeration) {
+        channelBanPanel.style.display = "none";
+        channelBanPanel.replaceChildren();
+    }
     updateSocialButtons();
+    updateRoomBarActions();
 
     document.querySelectorAll(".channelSelect").forEach((btn) => {
         btn.disabled = false;
@@ -465,6 +634,192 @@ function formatRoomTooltip(room) {
     return lines.join("\n");
 }
 
+function renderRoomModePanel() {
+    roomModePanel.replaceChildren();
+    if (!currentRoom) {
+        roomModePanel.classList.remove("visible");
+        return;
+    }
+
+    const definition = roomModeDefinition(currentRoom.mode);
+    const config = roomModeConfig(currentRoom);
+    const header = document.createElement("div");
+    header.className = "roomModeHeader";
+
+    const title = document.createElement("h3");
+    const modeTitle = {
+        social: config.topic || currentRoom.name,
+        watch: config.streamTitle || currentRoom.name,
+        game: (definition.settings?.find(setting => setting.key === "gameKey")?.options || [])
+            .find(option => option.value === config.gameKey)?.label || "Game Room",
+        custom: config.panelTitle || currentRoom.name
+    }[currentRoom.mode] || currentRoom.name;
+    title.textContent = modeTitle;
+
+    const mode = document.createElement("span");
+    mode.textContent = `${definition.label || formatRoomMode(currentRoom.mode)} Mode`;
+
+    header.appendChild(title);
+    header.appendChild(mode);
+    roomModePanel.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "roomModeBody";
+    body.textContent = {
+        social: config.welcome || currentRoom.description || "",
+        watch: config.hostNote || currentRoom.description || "",
+        game: `Round ${Number(config.roundLength) || 180}s | Score ${Number(config.scoreLimit) || 10}`,
+        custom: config.panelBody || currentRoom.description || ""
+    }[currentRoom.mode] || currentRoom.description || "";
+    roomModePanel.appendChild(body);
+
+    const actions = document.createElement("div");
+    actions.className = "roomModeActions";
+
+    if (currentRoom.mode === "social" && config.vibe) {
+        const chip = document.createElement("span");
+        chip.className = "roomModeChip";
+        chip.textContent = config.vibe;
+        actions.appendChild(chip);
+    }
+
+    if (currentRoom.mode === "watch" && config.streamUrl) {
+        const link = document.createElement("a");
+        link.href = config.streamUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open Stream";
+        actions.appendChild(link);
+    }
+
+    if (currentRoom.mode === "custom" && config.actionLabel && config.actionUrl) {
+        const link = document.createElement("a");
+        link.href = config.actionUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = config.actionLabel;
+        if (config.accentColor) {
+            link.style.borderColor = config.accentColor;
+            link.style.color = config.accentColor;
+        }
+        actions.appendChild(link);
+    }
+
+    if (actions.children.length) {
+        roomModePanel.appendChild(actions);
+    }
+
+    roomModePanel.classList.add("visible");
+}
+
+function createModeField(setting, value) {
+    const label = document.createElement("label");
+    label.textContent = setting.label || setting.key;
+    let input;
+
+    if (setting.type === "textarea") {
+        input = document.createElement("textarea");
+        input.rows = 3;
+    } else if (setting.type === "select") {
+        input = document.createElement("select");
+        (setting.options || []).forEach((option) => {
+            const item = document.createElement("option");
+            item.value = option.value;
+            item.textContent = option.label || option.value;
+            input.appendChild(item);
+        });
+    } else {
+        input = document.createElement("input");
+        input.type = setting.type === "number" || setting.type === "color" || setting.type === "url"
+            ? setting.type
+            : "text";
+    }
+
+    input.dataset.settingKey = setting.key;
+    if (setting.maxLength) input.maxLength = setting.maxLength;
+    if (setting.min !== undefined) input.min = setting.min;
+    if (setting.max !== undefined) input.max = setting.max;
+    if (setting.step !== undefined) input.step = setting.step;
+    input.value = value ?? "";
+    label.appendChild(input);
+    return label;
+}
+
+function renderRoomCustomizePanel() {
+    const canCustomize = !!currentRoom?.canCustomize;
+    roomCustomizePanel.style.display = canCustomize ? "grid" : "none";
+    roomCustomizeButton.disabled = !canCustomize;
+
+    if (!canCustomize || !currentRoom) {
+        roomCustomizeFields.replaceChildren();
+        return;
+    }
+
+    const modes = Object.entries(roomModeDefinitions);
+    roomCustomizeMode.replaceChildren();
+    modes.forEach(([mode, definition]) => {
+        const option = document.createElement("option");
+        option.value = mode;
+        option.textContent = `${definition.label || formatRoomMode(mode)} room`;
+        roomCustomizeMode.appendChild(option);
+    });
+    roomCustomizeMode.value = currentRoom.mode || "social";
+
+    const renderFields = () => {
+        const definition = roomModeDefinition(roomCustomizeMode.value);
+        const config = roomCustomizeMode.value === currentRoom.mode
+            ? roomModeConfig(currentRoom)
+            : { ...(definition.defaultConfig || {}) };
+        roomCustomizeFields.replaceChildren();
+        (definition.settings || []).forEach((setting) => {
+            roomCustomizeFields.appendChild(createModeField(setting, config[setting.key]));
+        });
+    };
+
+    roomCustomizeMode.onchange = renderFields;
+    renderFields();
+}
+
+function populateModeSelect(selectEl, selectedMode = "social") {
+    const modes = Object.entries(roomModeDefinitions);
+    selectEl.replaceChildren();
+
+    const source = modes.length
+        ? modes
+        : [["social", { label: "Social" }], ["watch", { label: "Watch" }], ["game", { label: "Game" }], ["custom", { label: "Custom" }]];
+
+    source.forEach(([mode, definition]) => {
+        const option = document.createElement("option");
+        option.value = mode;
+        option.textContent = `${definition.label || formatRoomMode(mode)} room`;
+        selectEl.appendChild(option);
+    });
+
+    selectEl.value = selectedMode || "social";
+}
+
+function collectModeConfig(container) {
+    const modeConfig = {};
+    container.querySelectorAll("[data-setting-key]").forEach((input) => {
+        modeConfig[input.dataset.settingKey] = input.value;
+    });
+    return modeConfig;
+}
+
+function renderRoomSettingsFields() {
+    const mode = roomSettingsMode.value || "social";
+    const editingRoom = roomSettingsRoomId ? findRoom(roomSettingsRoomId) : null;
+    const definition = roomModeDefinition(mode);
+    const config = roomSettingsAction === "edit" && editingRoom && editingRoom.mode === mode
+        ? roomModeConfig(editingRoom)
+        : { ...(definition.defaultConfig || {}) };
+
+    roomSettingsFields.replaceChildren();
+    (definition.settings || []).forEach((setting) => {
+        roomSettingsFields.appendChild(createModeField(setting, config[setting.key]));
+    });
+}
+
 function renderRoomDetails(room) {
     const details = document.createElement("div");
     details.className = "roomDetails";
@@ -495,6 +850,15 @@ function findChannel(channelId) {
     return channels.find(channel => channel.id === channelId) || null;
 }
 
+function findRoom(roomId) {
+    if (currentRoom?.id === roomId) return currentRoom;
+    for (const channel of channels) {
+        const room = (Array.isArray(channel.rooms) ? channel.rooms : []).find(item => item.id === roomId);
+        if (room) return room;
+    }
+    return rooms.find(room => room.id === roomId) || null;
+}
+
 function selectedHomeChannel() {
     let channel = findChannel(selectedHomeChannelId);
     if (!channel && currentChannelId) {
@@ -510,8 +874,10 @@ function selectedHomeChannel() {
 }
 
 function selectChannelHome(channelId) {
+    forceChannelHomeOpen = false;
     selectedHomeChannelId = channelId;
     renderChannelHome();
+    updateRoomBarActions();
 }
 
 function formatChannelCreatedAt(channel) {
@@ -542,18 +908,98 @@ function makeHomeAction(label, className, onClick, disabled = false) {
     return button;
 }
 
+function setManageTab(tab) {
+    manageTab = tab === "room" ? "room" : "channel";
+    channelSettingsTab.classList.toggle("active", manageTab === "channel");
+    roomSettingsTab.classList.toggle("active", manageTab === "room");
+    channelSettingsPanel.classList.toggle("active", manageTab === "channel");
+    roomSettingsPanel.classList.toggle("active", manageTab === "room");
+    manageTitle.textContent = manageTab === "room"
+        ? (roomSettingsAction === "create" ? "Create Room" : "Room Settings")
+        : "Channel Settings";
+}
+
+function openManageOverlay(tab = "channel") {
+    closeSocialDrawer();
+    closeChannelBrowser();
+    manageOverlay.classList.add("open");
+    manageOverlay.setAttribute("aria-hidden", "false");
+    setManageStatus("");
+    setManageTab(tab);
+}
+
+function closeManageOverlay() {
+    manageOverlay.classList.remove("open");
+    manageOverlay.setAttribute("aria-hidden", "true");
+    setManageStatus("");
+    settingsBanPanel.style.display = "none";
+    settingsBanPanel.replaceChildren();
+}
+
+function fillChannelSettings(channel = selectedHomeChannel()) {
+    if (!channel) return false;
+    settingsChannelId = channel.id;
+    channelSettingsName.value = channel.name || "";
+    channelSettingsDescription.value = channel.description || "";
+    channelSettingsPrivate.checked = !channel.isPublic;
+    channelSettingsCode.textContent = channel.isDefault
+        ? "The default OpenRealm channel always stays public."
+        : (channel.code ? `Channel code: ${channel.code}` : "Public discovery does not require a code.");
+    settingsBanListButton.style.display = channel.canManage && !channel.isDefault ? "inline-flex" : "none";
+    settingsDeleteChannelButton.style.display = channel.canDelete ? "inline-flex" : "none";
+    channelSettingsName.disabled = !channel.canManage;
+    channelSettingsDescription.disabled = !channel.canManage;
+    channelSettingsPrivate.disabled = !channel.canManage || !!channel.isDefault;
+    return true;
+}
+
+function openChannelSettings(channelId = selectedHomeChannelId) {
+    const channel = findChannel(channelId) || selectedHomeChannel();
+    if (!channel || (!channel.canManage && !channel.canDelete)) return;
+    selectedHomeChannelId = channel.id;
+    if (!fillChannelSettings(channel)) return;
+    openManageOverlay("channel");
+    window.setTimeout(() => channelSettingsName.focus(), 0);
+}
+
+function openRoomSettings(room = currentRoom, { create = false, channelId = currentChannelId } = {}) {
+    const channel = findChannel(channelId) || currentChannel || selectedHomeChannel();
+    if (create && !channel?.canManageRooms) return;
+    if (!create && !room) return;
+
+    roomSettingsAction = create ? "create" : "edit";
+    roomSettingsRoomId = create ? null : room.id;
+    roomSettingsChannelId = create ? channel?.id : (room.channelId || channel?.id || currentChannelId);
+    populateModeSelect(roomSettingsMode, create ? "social" : (room.mode || "social"));
+
+    roomSettingsName.value = create ? "" : (room.name || "");
+    roomSettingsDescription.value = create ? "" : (room.description || "");
+    roomSettingsSave.textContent = create ? "Create Room" : "Save Room";
+    settingsCloseRoomButton.style.display = !create && !room.isDefault && (room.canClose || channel?.canManageRooms)
+        ? "inline-flex"
+        : "none";
+    renderRoomSettingsFields();
+    openManageOverlay("room");
+    window.setTimeout(() => roomSettingsName.focus(), 0);
+}
+
 function renderChannelHome() {
     if (!channelHomeEl) return;
     channelHomeEl.replaceChildren();
 
     const channel = selectedHomeChannel();
     if (!channel) {
+        channelHomeEl.classList.remove("hidden");
         const empty = document.createElement("p");
         empty.className = "channelHomeEmpty";
         empty.textContent = "No channels to show yet.";
         channelHomeEl.appendChild(empty);
         return;
     }
+
+    const isLiveCurrentChannel = channel.id === currentChannelId && !!currentRoomId && !!currentRoom;
+    channelHomeEl.classList.toggle("hidden", isLiveCurrentChannel && !forceChannelHomeOpen);
+    if (isLiveCurrentChannel && !forceChannelHomeOpen) return;
 
     const header = document.createElement("div");
     header.className = "channelHomeHeader";
@@ -586,20 +1032,19 @@ function renderChannelHome() {
         actions.appendChild(makeHomeAction(channel.isFavorite ? "Saved" : "Save", "secondary", () => {
             socket.emit("toggleFavoriteChannel", { channelId: channel.id });
         }));
+        if (channel.canManageRooms) {
+            actions.appendChild(makeHomeAction("New Room", "secondary", () => {
+                openRoomSettings(null, { create: true, channelId: channel.id });
+            }));
+        }
+        if (channel.canManage || channel.canDelete) {
+            actions.appendChild(makeHomeAction("Channel Settings", "secondary", () => {
+                openChannelSettings(channel.id);
+            }));
+        }
     } else {
         actions.appendChild(makeHomeAction("Join Channel", "primary", () => {
             socket.emit("joinChannel", { channelId: channel.id });
-        }));
-    }
-
-    if (channel.canDelete) {
-        actions.appendChild(makeHomeAction("Delete", "danger", () => {
-            const confirmed = confirm(
-                `Delete ${channel.name}? This will remove all rooms in the channel and move everyone back to Town Square.`
-            );
-            if (confirmed) {
-                socket.emit("deleteChannel", { channelId: channel.id });
-            }
         }));
     }
 
@@ -645,7 +1090,7 @@ function renderChannelHome() {
         const empty = document.createElement("p");
         empty.className = "channelHomeEmpty";
         empty.textContent = channel.canManageRooms
-            ? "No rooms yet. Owners can create the first room from Room Tools."
+            ? "No rooms yet. Create the first room from Channel Home."
             : "No rooms have been created yet.";
         roomStrip.appendChild(empty);
     } else {
@@ -665,6 +1110,9 @@ function renderChannelHome() {
             info.appendChild(roomName);
             info.appendChild(roomMeta);
 
+            const roomActions = document.createElement("div");
+            roomActions.className = "channelHomeRoomActions";
+
             const button = document.createElement("button");
             button.type = "button";
             button.textContent = room.id === currentRoomId
@@ -679,9 +1127,18 @@ function renderChannelHome() {
                 }
                 socket.emit("joinRoom", { roomId: room.id });
             });
+            roomActions.appendChild(button);
+
+            if (channel.canManageRooms) {
+                const editButton = document.createElement("button");
+                editButton.type = "button";
+                editButton.textContent = "Edit";
+                editButton.addEventListener("click", () => openRoomSettings(room, { channelId: channel.id }));
+                roomActions.appendChild(editButton);
+            }
 
             row.appendChild(info);
-            row.appendChild(button);
+            row.appendChild(roomActions);
             roomStrip.appendChild(row);
         });
     }
@@ -695,6 +1152,159 @@ function openChannelContext(channel) {
     if (!channel?.isMember || !playerName) return;
     setChannelError("");
     socket.emit("joinChannel", { channelId: channel.id });
+}
+
+function openChannelBrowser() {
+    if (!playerName) return;
+    closeSocialDrawer();
+    channelBrowserOverlay.classList.add("open");
+    channelBrowserOverlay.setAttribute("aria-hidden", "false");
+    renderChannelBrowser();
+    window.setTimeout(() => channelBrowserSearch.focus(), 0);
+}
+
+function closeChannelBrowser() {
+    channelBrowserOverlay.classList.remove("open");
+    channelBrowserOverlay.setAttribute("aria-hidden", "true");
+}
+
+function channelMatchesBrowserQuery(channel, query) {
+    if (!query) return true;
+
+    return [
+        channel.name,
+        channel.ownerName,
+        channel.description
+    ].some(value => String(value || "").toLowerCase().includes(query));
+}
+
+function compareBrowserChannels(a, b) {
+    if (channelBrowserSortMode === "members") {
+        return (Number(b.memberCount) || 0) - (Number(a.memberCount) || 0)
+            || String(a.name).localeCompare(String(b.name));
+    }
+
+    if (channelBrowserSortMode === "rooms") {
+        return (Number(b.roomCount) || 0) - (Number(a.roomCount) || 0)
+            || (Number(b.playerCount) || 0) - (Number(a.playerCount) || 0)
+            || String(a.name).localeCompare(String(b.name));
+    }
+
+    if (channelBrowserSortMode === "newest") {
+        return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0)
+            || String(a.name).localeCompare(String(b.name));
+    }
+
+    if (channelBrowserSortMode === "name") {
+        return String(a.name).localeCompare(String(b.name));
+    }
+
+    return (Number(b.playerCount) || 0) - (Number(a.playerCount) || 0)
+        || (Number(b.memberCount) || 0) - (Number(a.memberCount) || 0)
+        || (Number(b.roomCount) || 0) - (Number(a.roomCount) || 0)
+        || String(a.name).localeCompare(String(b.name));
+}
+
+function publicBrowserChannels() {
+    const query = channelBrowserQuery.trim().toLowerCase();
+
+    return channels
+        .filter(channel => channel.isPublic)
+        .filter(channel => !channelBrowserOnlyUnjoined || !channel.isMember)
+        .filter(channel => !channelBrowserOnlyActive || (Number(channel.playerCount) || 0) > 0)
+        .filter(channel => !channelBrowserOnlyRooms || (Number(channel.roomCount) || 0) > 0)
+        .filter(channel => channelMatchesBrowserQuery(channel, query))
+        .sort(compareBrowserChannels);
+}
+
+function makeBrowserAction(label, className, onClick, disabled = false) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.className = className || "";
+    button.disabled = disabled;
+    button.addEventListener("click", onClick);
+    return button;
+}
+
+function renderChannelBrowser() {
+    channelBrowserResults.replaceChildren();
+
+    const results = publicBrowserChannels();
+    const totalPublic = channels.filter(channel => channel.isPublic).length;
+    const resultWord = results.length === 1 ? "channel" : "channels";
+    channelBrowserStats.textContent = `${results.length} ${resultWord} found from ${totalPublic} public channels`;
+
+    if (!results.length) {
+        const empty = document.createElement("p");
+        empty.className = "channelEmpty";
+        empty.textContent = channelBrowserQuery.trim() ? "No public channels match these filters." : "No public channels to show yet.";
+        channelBrowserResults.appendChild(empty);
+        return;
+    }
+
+    results.forEach((channel) => {
+        const card = document.createElement("article");
+        card.className = "channelBrowserCard" + (channel.id === currentChannelId ? " current" : "");
+
+        const header = document.createElement("div");
+        header.className = "channelBrowserCardHeader";
+
+        const name = document.createElement("strong");
+        name.textContent = channel.name;
+
+        const owner = document.createElement("span");
+        owner.textContent = `Owner: ${channel.ownerName || "Unknown"}${channel.isMember ? " - Joined" : ""}`;
+
+        header.appendChild(name);
+        header.appendChild(owner);
+
+        const description = document.createElement("p");
+        description.className = "channelBrowserDescription";
+        description.textContent = channel.description || "No channel description yet.";
+
+        const meta = document.createElement("div");
+        meta.className = "channelBrowserMeta";
+        [
+            `${Number(channel.memberCount) || 0} members`,
+            `${Number(channel.playerCount) || 0} online`,
+            `${Number(channel.roomCount) || 0} rooms`,
+            formatChannelCreatedAt(channel) ? `Created ${formatChannelCreatedAt(channel)}` : ""
+        ].filter(Boolean).forEach((label) => {
+            const chip = document.createElement("span");
+            chip.textContent = label;
+            meta.appendChild(chip);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "channelBrowserActions";
+
+        if (channel.isMember) {
+            actions.appendChild(makeBrowserAction("Open", "primary", () => {
+                closeChannelBrowser();
+                openChannelContext(channel);
+            }));
+            actions.appendChild(makeBrowserAction(channel.isFavorite ? "Saved" : "Save", "", () => {
+                socket.emit("toggleFavoriteChannel", { channelId: channel.id });
+            }));
+        } else {
+            actions.appendChild(makeBrowserAction("Join", "primary", () => {
+                setChannelError("");
+                socket.emit("joinChannel", { channelId: channel.id });
+                closeChannelBrowser();
+            }, !playerName));
+            actions.appendChild(makeBrowserAction("Preview", "", () => {
+                selectChannelHome(channel.id);
+                closeChannelBrowser();
+            }));
+        }
+
+        card.appendChild(header);
+        card.appendChild(description);
+        card.appendChild(meta);
+        card.appendChild(actions);
+        channelBrowserResults.appendChild(card);
+    });
 }
 
 function renderChannelBucket(listEl, bucket, emptyText) {
@@ -846,21 +1456,12 @@ function renderChannelBucket(listEl, bucket, emptyText) {
 }
 
 function renderChannelList() {
-    const favorites = channels.filter(channel => channel.isFavorite);
-    const query = channelBrowserQuery.trim().toLowerCase();
-    const publicChannels = channels.filter((channel) => {
-        if (!channel.isPublic) return false;
-        if (!query) return true;
-
-        return [
-            channel.name,
-            channel.ownerName,
-            channel.description
-        ].some(value => String(value || "").toLowerCase().includes(query));
-    });
+    const favorites = channels.filter(channel => channel.isFavorite && channel.isMember);
+    const memberChannels = channels.filter(channel => channel.isMember);
 
     renderChannelBucket(favoriteChannelListEl, favorites, "No saved channels.");
-    renderChannelBucket(publicChannelListEl, publicChannels, query ? "No matching channels." : "No public channels.");
+    renderChannelBucket(memberChannelListEl, memberChannels, "No joined channels.");
+    renderChannelBrowser();
     renderChannelHome();
     updateChannelControls();
 }
@@ -874,6 +1475,9 @@ function updateRoomControls() {
     roomCreateDescription.disabled = !canCreate;
     roomCloseButton.style.display = currentRoom?.canClose ? "block" : "none";
     roomCloseButton.disabled = !currentRoom?.canClose;
+    renderRoomCustomizePanel();
+    renderRoomModePanel();
+    updateRoomBarActions();
     document.querySelectorAll(".roomJoinButton").forEach((btn) => {
         btn.disabled = !canUseRooms || btn.dataset.current === "true";
     });
@@ -881,7 +1485,61 @@ function updateRoomControls() {
 
 channelBrowserSearch.addEventListener("input", (e) => {
     channelBrowserQuery = e.target.value || "";
-    renderChannelList();
+    renderChannelBrowser();
+});
+
+channelBrowserSort.addEventListener("change", (e) => {
+    channelBrowserSortMode = e.target.value || "activity";
+    renderChannelBrowser();
+});
+
+channelBrowserUnjoinedToggle.addEventListener("change", (e) => {
+    channelBrowserOnlyUnjoined = !!e.target.checked;
+    renderChannelBrowser();
+});
+
+channelBrowserActiveToggle.addEventListener("change", (e) => {
+    channelBrowserOnlyActive = !!e.target.checked;
+    renderChannelBrowser();
+});
+
+channelBrowserRoomsToggle.addEventListener("change", (e) => {
+    channelBrowserOnlyRooms = !!e.target.checked;
+    renderChannelBrowser();
+});
+
+channelBrowserButton.addEventListener("click", openChannelBrowser);
+channelBrowserClose.addEventListener("click", closeChannelBrowser);
+channelBrowserOverlay.addEventListener("click", (e) => {
+    if (e.target === channelBrowserOverlay) closeChannelBrowser();
+});
+roomBarChannelInfoButton.addEventListener("click", () => {
+    if (!currentChannel) return;
+    selectedHomeChannelId = currentChannelId;
+    forceChannelHomeOpen = !forceChannelHomeOpen;
+    renderChannelHome();
+    updateRoomBarActions();
+});
+roomBarNewRoomButton.addEventListener("click", () => {
+    if (!currentChannel?.canManageRooms) return;
+    openRoomSettings(null, { create: true, channelId: currentChannelId });
+});
+roomBarChannelSettingsButton.addEventListener("click", () => {
+    if (!currentChannel || (!currentChannel.canManage && !currentChannel.canDelete)) return;
+    openChannelSettings(currentChannelId);
+});
+roomBarRoomSettingsButton.addEventListener("click", () => {
+    if (!currentRoom || (!currentRoom.canCustomize && !currentRoom.canClose)) return;
+    openRoomSettings(currentRoom, { channelId: currentRoom.channelId || currentChannelId });
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && channelBrowserOverlay.classList.contains("open")) {
+        closeChannelBrowser();
+    }
+    if (e.key === "Escape" && manageOverlay.classList.contains("open")) {
+        closeManageOverlay();
+    }
 });
 
 friendsButton.addEventListener("click", () => openSocialDrawer("friends"));
@@ -942,6 +1600,108 @@ channelJoinCodeForm.addEventListener("submit", (e) => {
     channelCodeInput.value = "";
 });
 
+manageClose.addEventListener("click", closeManageOverlay);
+manageOverlay.addEventListener("click", (e) => {
+    if (e.target === manageOverlay) closeManageOverlay();
+});
+channelSettingsTab.addEventListener("click", () => {
+    fillChannelSettings(findChannel(settingsChannelId) || selectedHomeChannel());
+    setManageTab("channel");
+});
+roomSettingsTab.addEventListener("click", () => {
+    if (!roomSettingsRoomId && roomSettingsAction !== "create" && currentRoom) {
+        openRoomSettings(currentRoom, { channelId: currentRoom.channelId || currentChannelId });
+        return;
+    }
+    setManageTab("room");
+});
+
+channelSettingsForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!settingsChannelId) return;
+    const name = channelSettingsName.value.trim();
+    if (!name) {
+        setManageStatus("Channel name is required.", true);
+        return;
+    }
+
+    setManageStatus("Saving channel...");
+    socket.emit("updateChannel", {
+        channelId: settingsChannelId,
+        name,
+        description: channelSettingsDescription.value.trim(),
+        isPrivate: channelSettingsPrivate.checked
+    });
+});
+
+settingsBanListButton.addEventListener("click", () => {
+    if (!settingsChannelId) return;
+    if (settingsBanPanel.style.display === "block") {
+        settingsBanPanel.style.display = "none";
+        settingsBanPanel.replaceChildren();
+        return;
+    }
+    setManageStatus("Loading bans...");
+    socket.emit("getChannelBanList", { channelId: settingsChannelId });
+});
+
+settingsDeleteChannelButton.addEventListener("click", () => {
+    const channel = findChannel(settingsChannelId);
+    if (!channel?.canDelete) return;
+    const confirmed = confirm(
+        `Delete ${channel.name}? This will remove all rooms in the channel and move everyone back to Town Square.`
+    );
+    if (!confirmed) return;
+    setManageStatus("Deleting channel...");
+    socket.emit("deleteChannel", { channelId: channel.id });
+    closeManageOverlay();
+});
+
+roomSettingsMode.addEventListener("change", renderRoomSettingsFields);
+
+roomSettingsForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = roomSettingsName.value.trim();
+    if (!name) {
+        setManageStatus("Room name is required.", true);
+        return;
+    }
+
+    const payload = {
+        name,
+        description: roomSettingsDescription.value.trim(),
+        mode: roomSettingsMode.value,
+        modeConfig: collectModeConfig(roomSettingsFields)
+    };
+
+    if (roomSettingsAction === "create") {
+        setManageStatus("Creating room...");
+        socket.emit("createRoom", {
+            ...payload,
+            channelId: roomSettingsChannelId || currentChannelId
+        });
+        closeManageOverlay();
+        return;
+    }
+
+    if (!roomSettingsRoomId) return;
+    setManageStatus("Saving room...");
+    socket.emit("updateRoom", {
+        ...payload,
+        roomId: roomSettingsRoomId
+    });
+});
+
+settingsCloseRoomButton.addEventListener("click", () => {
+    const room = findRoom(roomSettingsRoomId);
+    if (!room || room.isDefault) return;
+    const confirmed = confirm(`Close ${room.name}? Everyone inside will be moved to another room.`);
+    if (!confirmed) return;
+    setManageStatus("Closing room...");
+    socket.emit("closeRoom", { roomId: room.id });
+    closeManageOverlay();
+});
+
 channelDeleteButton.addEventListener("click", () => {
     if (!currentChannel?.canDelete) return;
 
@@ -952,6 +1712,15 @@ channelDeleteButton.addEventListener("click", () => {
 
     setChannelError("");
     socket.emit("deleteChannel", { channelId: currentChannel.id });
+});
+
+channelBanListButton.addEventListener("click", () => {
+    if (!canManageCurrentChannel()) return;
+    if (channelBanPanel.style.display === "block") {
+        channelBanPanel.style.display = "none";
+        return;
+    }
+    socket.emit("getChannelBanList", { channelId: currentChannelId });
 });
 
 roomCreateForm.addEventListener("submit", (e) => {
@@ -974,6 +1743,24 @@ roomCreateForm.addEventListener("submit", (e) => {
     roomCreateInput.value = "";
     roomModeSelect.value = "social";
     roomCreateDescription.value = "";
+});
+
+roomCustomizePanel.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!currentRoom?.canCustomize) return;
+
+    const mode = roomCustomizeMode.value;
+    const modeConfig = {};
+    roomCustomizeFields.querySelectorAll("[data-setting-key]").forEach((input) => {
+        modeConfig[input.dataset.settingKey] = input.value;
+    });
+
+    setRoomError("");
+    socket.emit("updateRoomModeConfig", {
+        roomId: currentRoom.id,
+        mode,
+        modeConfig
+    });
 });
 
 roomCloseButton.addEventListener("click", () => {
@@ -1052,12 +1839,18 @@ canvas.addEventListener("click", (e) => {
 const durationPicker = document.getElementById("durationPicker");
 let durationPendingAction = null;
 let durationPendingTarget = null;
+let durationPendingMode = "admin";
 
-function showDurationPicker(action, targetId, left, top) {
-    document.getElementById("durationPickerTitle").textContent =
-        action === "mute" ? "Mute for how long?" : "Freeze for how long?";
+function showDurationPicker(action, targetId, left, top, mode = "admin") {
+    const titles = {
+        mute: "Mute for how long?",
+        freeze: "Freeze for how long?",
+        channelBan: "Ban for how long?"
+    };
+    document.getElementById("durationPickerTitle").textContent = titles[action] || "Choose duration";
     durationPendingAction = action;
     durationPendingTarget = targetId;
+    durationPendingMode = mode;
     durationPicker.style.left    = left;
     durationPicker.style.top     = top;
     durationPicker.style.display = "block";
@@ -1069,14 +1862,23 @@ document.querySelectorAll("#durationPicker button[data-minutes]").forEach(btn =>
     btn.addEventListener("click", () => {
         if (!durationPendingTarget || !durationPendingAction) return;
         const minutes = parseInt(btn.dataset.minutes, 10);
-        socket.emit("adminAction", {
-            targetId: durationPendingTarget,
-            action:   durationPendingAction,
+        if (durationPendingMode === "channelBan") {
+            socket.emit("channelModerationAction", {
+                targetId: durationPendingTarget,
+                action: "ban",
+                duration: minutes > 0 ? minutes : null
+            });
+        } else {
+            socket.emit("adminAction", {
+                targetId: durationPendingTarget,
+                action:   durationPendingAction,
             duration: minutes > 0 ? minutes : null   // 0 = Permanent → no duration
         });
+        }
         durationPicker.style.display = "none";
         durationPendingAction = null;
         durationPendingTarget = null;
+        durationPendingMode = "admin";
     });
 });
 
@@ -1171,6 +1973,12 @@ canvas.addEventListener("contextmenu", (e) => {
     if (p) freezeBtn.textContent = p.frozen ? "Unfreeze" : "Freeze";
 
     // View Profile — any logged-in player, real players only (not bots)
+    const canChannelModerateTarget = hitPlayer && canManageCurrentChannel();
+    document.getElementById("ctxCanvasChannelBan").style.display =
+        canChannelModerateTarget ? "block" : "none";
+    document.getElementById("ctxCanvasChannelKick").style.display =
+        canChannelModerateTarget && currentChannel && !currentChannel.isPublic ? "block" : "none";
+
     document.getElementById("ctxViewProfile").style.display =
         hitPlayer ? "block" : "none";
 
@@ -1187,7 +1995,9 @@ canvas.addEventListener("contextmenu", (e) => {
 
     // Show the "Admin" label and divider only when there are admin options
     // AND there is also a general option (View Profile) below the line.
-    const hasAdminOptions = (canModerate && hitTarget) || (canManageRoomTools && (hitBot || !hitTarget));
+    const hasAdminOptions = (canModerate && hitTarget)
+        || canChannelModerateTarget
+        || (canManageRoomTools && (hitBot || !hitTarget));
     const hasBothSections = hasAdminOptions && hitPlayer;
     document.getElementById("ctxAdminLabel").style.display = hasAdminOptions ? "block" : "none";
     document.getElementById("ctxDivider").style.display    = hasBothSections ? "block" : "none";
@@ -1241,6 +2051,22 @@ document.getElementById("ctxCanvasFreeze").addEventListener("click", (e) => {
         e.stopPropagation();
         showDurationPicker(action, targetId, canvasMenu.style.left, canvasMenu.style.top);
     }
+});
+
+document.getElementById("ctxCanvasChannelBan").addEventListener("click", (e) => {
+    const targetId = canvasMenu.dataset.targetId;
+    if (!targetId) return;
+    canvasMenu.style.display = "none";
+    e.stopPropagation();
+    showDurationPicker("channelBan", targetId, canvasMenu.style.left, canvasMenu.style.top, "channelBan");
+});
+
+document.getElementById("ctxCanvasChannelKick").addEventListener("click", () => {
+    const targetId = canvasMenu.dataset.targetId;
+    if (targetId) {
+        socket.emit("channelModerationAction", { targetId, action: "kick" });
+    }
+    canvasMenu.style.display = "none";
 });
 
 document.getElementById("ctxViewProfile").addEventListener("click", () => {
@@ -1414,6 +2240,16 @@ socket.on("joinDenied", (data = {}) => {
     location.reload();
 });
 
+socket.on("roomModeDefinitions", (definitions = {}) => {
+    roomModeDefinitions = definitions && typeof definitions === "object" ? definitions : {};
+    renderRoomCustomizePanel();
+    renderRoomModePanel();
+    if (manageOverlay.classList.contains("open") && manageTab === "room") {
+        populateModeSelect(roomSettingsMode, roomSettingsMode.value || currentRoom?.mode || "social");
+        renderRoomSettingsFields();
+    }
+});
+
 socket.on("roomList", (serverRooms) => {
     rooms = Array.isArray(serverRooms) ? serverRooms : [];
     renderChannelList();
@@ -1423,16 +2259,22 @@ socket.on("roomList", (serverRooms) => {
 socket.on("channelList", (serverChannels) => {
     channels = Array.isArray(serverChannels) ? serverChannels : [];
     renderChannelList();
+    if (manageOverlay.classList.contains("open") && settingsChannelId) {
+        fillChannelSettings(findChannel(settingsChannelId));
+    }
 });
 
 socket.on("channelChanged", ({ channel } = {}) => {
     if (!channel) return;
+    forceChannelHomeOpen = false;
     currentChannel = channel;
     currentChannelId = channel.id;
     selectedHomeChannelId = channel.id;
     expandedChannelIds.add(channel.id);
     setCurrentChannelUi(channel);
     setChannelError("");
+    channelBanPanel.style.display = "none";
+    channelBanPanel.replaceChildren();
     if (channel.roomCount === 0) {
         currentRoom = null;
         currentRoomId = "";
@@ -1443,12 +2285,16 @@ socket.on("channelChanged", ({ channel } = {}) => {
         setChatInputEnabled(false, "Create a room to chat...");
         setRoomError(channel.canManageRooms ? "Owners can create a room to start chatting here." : "This channel has no rooms yet.");
     }
+    if (settingsChannelId === channel.id) {
+        fillChannelSettings(channel);
+    }
     renderChannelList();
     updateRoomControls();
 });
 
 socket.on("roomChanged", ({ room } = {}) => {
     if (!room) return;
+    forceChannelHomeOpen = false;
     currentRoom = room;
     if (room.channelId) currentChannelId = room.channelId;
     if (room.channelId) selectedHomeChannelId = room.channelId;
@@ -1462,12 +2308,18 @@ socket.on("roomChanged", ({ room } = {}) => {
     }
     setRoomError("");
     expandedChannelIds.add(currentChannelId);
+    if (roomSettingsRoomId === room.id && roomSettingsAction === "edit") {
+        openRoomSettings(room, { channelId: room.channelId || currentChannelId });
+    }
     renderChannelList();
     updateRoomControls();
 });
 
 socket.on("channelError", (data = {}) => {
-    setChannelError(data.message || "Channel action failed.");
+    setChannelError(data.message || "Channel action failed.", data.ok !== true);
+    if (manageOverlay.classList.contains("open") && manageTab === "channel") {
+        setManageStatus(data.message || "Channel action failed.", data.ok !== true);
+    }
 });
 
 socket.on("channelDeleted", (data = {}) => {
@@ -1478,15 +2330,47 @@ socket.on("channelDeleted", (data = {}) => {
         }
     }
     expandedRoomInfoId = null;
-    setChannelError(data.message || "Channel deleted.");
+    if (settingsChannelId === data.channelId) {
+        closeManageOverlay();
+    }
+    setChannelError(data.message || "Channel deleted.", false);
+});
+
+socket.on("channelModerationNotice", (data = {}) => {
+    setChannelError(data.message || "Channel membership changed.", false);
+});
+
+socket.on("channelBanList", ({ channelId, bans } = {}) => {
+    renderChannelBanList(channelId, Array.isArray(bans) ? bans : []);
+    renderSettingsBanList(channelId, Array.isArray(bans) ? bans : []);
+    if (manageOverlay.classList.contains("open") && settingsChannelId === channelId) {
+        setManageStatus("");
+    }
 });
 
 socket.on("roomError", (data = {}) => {
-    setRoomError(data.message || "Room action failed.");
+    setRoomError(data.message || "Room action failed.", data.ok !== true);
+    if (manageOverlay.classList.contains("open") && manageTab === "room") {
+        setManageStatus(data.message || "Room action failed.", data.ok !== true);
+    }
 });
 
 socket.on("roomClosed", (data = {}) => {
-    setRoomError(data.message || "Room closed.");
+    if (roomSettingsRoomId === currentRoomId) {
+        closeManageOverlay();
+    }
+    setRoomError(data.message || "Room closed.", false);
+});
+
+socket.on("roomRuntime", ({ roomId, mode, modeConfig } = {}) => {
+    if (!currentRoom || roomId !== currentRoom.id) return;
+    currentRoom = {
+        ...currentRoom,
+        mode: mode || currentRoom.mode,
+        modeConfig: modeConfig || currentRoom.modeConfig || {}
+    };
+    renderRoomCustomizePanel();
+    renderRoomModePanel();
 });
 
 socket.on("friendList", (serverFriends) => {
@@ -1797,6 +2681,7 @@ document.getElementById("playerList").addEventListener("contextmenu", (e) => {
     // Admin section — only visible to admins, hidden for bots on View Profile
     const isRealPlayer = !p.isBot;
     const canModerate = canModerateCurrentChannel();
+    const canChannelModerateTarget = isRealPlayer && canManageCurrentChannel();
     const friendState = isRealPlayer ? friendByUsername(p.name) : null;
     const canMessage = isRealPlayer && friendState?.status === "accepted";
     const isPendingFriend = isRealPlayer && friendState?.status === "pending";
@@ -1808,17 +2693,23 @@ document.getElementById("playerList").addEventListener("contextmenu", (e) => {
     addFriendButton.disabled = isPendingFriend;
     addFriendButton.textContent = isPendingFriend ? "Friend Pending" : "Add Friend";
     document.getElementById("ctxListSocialDivider").style.display =
-        (canMessage || canAddFriend) && canModerate ? "block" : "none";
-    document.getElementById("ctxListAdminLabel").style.display = canModerate ? "block" : "none";
+        (canMessage || canAddFriend) && (canModerate || canChannelModerateTarget) ? "block" : "none";
+    document.getElementById("ctxListAdminLabel").style.display =
+        (canModerate || canChannelModerateTarget) ? "block" : "none";
     document.getElementById("ctxMute").style.display           = canModerate ? "block" : "none";
     document.getElementById("ctxFreeze").style.display         = canModerate ? "block" : "none";
+    document.getElementById("ctxListChannelBan").style.display =
+        canChannelModerateTarget ? "block" : "none";
+    document.getElementById("ctxListChannelKick").style.display =
+        canChannelModerateTarget && currentChannel && !currentChannel.isPublic ? "block" : "none";
     if (canModerate) {
         document.getElementById("ctxMute").textContent   = p.muted  ? "Unmute"   : "Mute";
         document.getElementById("ctxFreeze").textContent = p.frozen ? "Unfreeze" : "Freeze";
     }
 
     // Divider and View Profile — shown for real players only
-    document.getElementById("ctxListDivider").style.display    = canModerate && isRealPlayer ? "block" : "none";
+    document.getElementById("ctxListDivider").style.display =
+        (canModerate || canChannelModerateTarget) && isRealPlayer ? "block" : "none";
     document.getElementById("ctxListViewProfile").style.display = isRealPlayer ? "block" : "none";
 
     contextMenu.style.left    = e.clientX + "px";
@@ -1850,6 +2741,20 @@ document.getElementById("ctxFreeze").addEventListener("click", (e) => {
         e.stopPropagation();
         showDurationPicker(action, contextTargetId, contextMenu.style.left, contextMenu.style.top);
     }
+});
+
+document.getElementById("ctxListChannelBan").addEventListener("click", (e) => {
+    if (!contextTargetId) return;
+    contextMenu.style.display = "none";
+    e.stopPropagation();
+    showDurationPicker("channelBan", contextTargetId, contextMenu.style.left, contextMenu.style.top, "channelBan");
+});
+
+document.getElementById("ctxListChannelKick").addEventListener("click", () => {
+    if (contextTargetId) {
+        socket.emit("channelModerationAction", { targetId: contextTargetId, action: "kick" });
+    }
+    contextMenu.style.display = "none";
 });
 
 // View Profile button (player list)

@@ -1,6 +1,6 @@
 # OpenRealm
 
-Version: `0.2.2`
+Version: `0.2.3`
 
 OpenRealm is a browser-based multiplayer social game where players can log in, enter live rooms, chat, customize their avatar color, and move around a shared 2D canvas world.
 
@@ -26,8 +26,10 @@ The project is moving toward a Discord-like social structure: public channels co
 - Owner-only channel deletion with automatic room cleanup
 - Optional room descriptions with expandable room info panels
 - Room modes for social, watch, game, and custom room concepts
+- Configurable room-mode settings and a live room-mode panel
 - Owner-only room creation and close-room controls
 - Channel-scoped mute, freeze, spawn-bot, and remove-bot actions
+- Channel admin timed bans, permanent bans, private-channel kicks, and unban tools
 - Avatar color customization saved to MongoDB
 - Responsive desktop/mobile layout
 
@@ -58,6 +60,7 @@ OpenRealm now uses a `channel -> room` structure.
 - Rooms are selected from inside their channel.
 - Room names can be clicked to show full details, description, owner, and live player/bot counts.
 - Rooms can start as social, watch, game, or custom mode rooms.
+- Channel admins can customize a room's mode settings after creation.
 - Private channels are joined with a channel code, then their rooms can be explored from the sidebar.
 - Creating a channel automatically creates a `General` room.
 - Closing a room moves players to another public room in the same channel when possible, otherwise back to Town Square.
@@ -65,6 +68,17 @@ OpenRealm now uses a `channel -> room` structure.
 - Channel owners can delete their own non-default channels, which removes all rooms in that channel and moves active players back to Town Square.
 
 The default channel is `OpenRealm`, and the default room is `Town Square`.
+
+## Room Customization
+
+Rooms now use a server-owned mode registry. Each mode defines its own configurable fields, defaults, and sanitized runtime payload.
+
+- `social` rooms support a topic, welcome text, and vibe.
+- `watch` rooms support a stream title, stream URL, and host note.
+- `game` rooms support a game preset, round length, and score limit.
+- `custom` rooms support a custom panel title, body text, accent color, and action link.
+
+The active room mode renders in the main play area above the canvas. Channel admins can edit the current room from Room Tools, and updates are saved to MongoDB through `Room.modeConfig`.
 
 ## Friends And Private Messages
 
@@ -80,7 +94,11 @@ Any logged-in user can create a channel.
 
 Channel owners can create and close rooms inside their channel. The default `OpenRealm` channel is system-owned, so global admins can manage rooms there.
 
-Channel membership roles are stored as `owner`, `admin`, `moderator`, or `member`. The role assignment UI is still upcoming, but the server now uses these roles for channel-scoped moderation checks. Deleting a channel and changing its room structure are owner-only and do not apply to the default `OpenRealm` channel.
+Channel membership roles are stored as `owner`, `admin`, `moderator`, or `member`. The role assignment UI is still upcoming, but the server now uses these roles for channel-scoped moderation checks.
+
+Channel owners and admins can ban members from user-created channels for a timed duration or permanently. Private channels also support kicking a member without banning them, so they can rejoin later with a valid channel code. The Channel Tools ban list lets admins review active bans and unban members.
+
+Deleting a channel and changing its room structure are owner-only and do not apply to the default `OpenRealm` channel.
 
 ```bash
 node makeAdmin.js <username>
@@ -136,13 +154,37 @@ public/auth.js         Login/register client logic
 models/User.js         User accounts, permissions, favorites, avatar data
 models/Channel.js      Public channel containers
 models/ChannelMember.js Channel membership, roles, and membership status
-models/Room.js         Joinable rooms inside channels
+models/Room.js         Joinable rooms, modes, and mode customization config
 models/Friendship.js   Friend requests and accepted friend relationships
 models/DirectMessage.js Private one-to-one chat messages
 routes/auth.js         Register/login API routes
 makeAdmin.js           Grants admin and creation privileges
 setRoomCreator.js      Grants/revokes creation privileges only
 ```
+
+## Version 0.2.3 Notes
+
+- Added a server-owned room mode definition registry.
+- Added sanitized per-mode room settings saved in `Room.modeConfig`.
+- Added live room mode panels for social, watch, game, and custom rooms.
+- Added Room Tools customization controls for channel admins.
+- Added runtime room mode updates without requiring a page refresh.
+- Split public channel discovery into a dedicated Channel Browser window.
+- Added Channel Browser search, sorting, and filters for unjoined, active, and room-backed public channels.
+- Updated the left sidebar to show favorites separately while keeping all joined channels visible.
+- Moved channel and room management into a dedicated settings dialog.
+- Added channel editing for name, description, and public/private visibility.
+- Added room editing for name, description, mode, and mode-specific customization.
+- Reduced normal room chrome by hiding Channel Home during active room play and compacting room metadata.
+- Added a Channel Info toggle so players can reopen the current channel details from the room bar.
+- Made the left channel sidebar sticky on desktop so navigation stays in view while scrolling.
+- Scoped channel editing and moderation to channel roles so global app admins do not automatically control user-created channels.
+- Allowed global app admins to edit the default OpenRealm channel description while keeping it public-only.
+- Added channel admin timed bans and permanent bans.
+- Added private-channel kick support that removes membership without banning.
+- Added a Channel Tools ban list with unban actions.
+- Active channel bans now block public joins, private code joins, and friend join shortcuts.
+- Timed bans are released automatically when they expire on the next membership check.
 
 ## Version 0.2.2 Notes
 

@@ -35,6 +35,30 @@ const channelMemberSchema = new mongoose.Schema({
         index: true
     },
 
+    banExpiresAt: {
+        type: Date,
+        default: null,
+        index: true
+    },
+
+    bannedAt: {
+        type: Date,
+        default: null
+    },
+
+    bannedByUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+    },
+
+    bannedByUsername: {
+        type: String,
+        trim: true,
+        maxlength: 20,
+        default: ""
+    },
+
     joinedAt: {
         type: Date,
         default: Date.now

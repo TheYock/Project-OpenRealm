@@ -55,6 +55,11 @@
                 display: flex;
                 flex-direction: column;
                 gap: 12px;
+                position: sticky;
+                top: 54px;
+                align-self: start;
+                max-height: calc(100vh - 66px);
+                overflow-y: auto;
                 min-height: 600px;
                 padding: 12px;
                 border: 1px solid #333;
@@ -98,6 +103,7 @@
 
             #channelCreateInput,
             #channelBrowserSearch,
+            #channelBrowserSort,
             #channelCodeInput,
             #roomCreateInput,
             #roomModeSelect,
@@ -113,6 +119,7 @@
 
             #channelCreateInput:focus,
             #channelBrowserSearch:focus,
+            #channelBrowserSort:focus,
             #channelCodeInput:focus,
             #roomCreateInput:focus,
             #roomModeSelect:focus,
@@ -135,6 +142,7 @@
             #channelCreateButton,
             #channelJoinCodeButton,
             #channelDeleteButton,
+            #channelBanListButton,
             #roomCreateButton,
             #roomCloseButton {
                 padding: 8px 10px;
@@ -158,9 +166,18 @@
                 background: #d32f2f;
             }
 
+            #channelBanListButton {
+                display: none;
+                width: 100%;
+                background: #333;
+                border: 1px solid #555;
+                color: #ddd;
+            }
+
             #channelCreateButton:disabled,
             #channelJoinCodeButton:disabled,
             #channelDeleteButton:disabled,
+            #channelBanListButton:disabled,
             #roomCreateButton:disabled,
             #roomCloseButton:disabled {
                 opacity: 0.55;
@@ -191,6 +208,11 @@
                 font-size: 0.78rem;
             }
 
+            #channelError.success,
+            #roomError.success {
+                color: #4caf50;
+            }
+
             .channelSection h3 {
                 margin: 8px 0 7px;
                 color: #777;
@@ -205,13 +227,56 @@
                 gap: 6px;
             }
 
-            #channelBrowserSearch {
-                width: 100%;
-                margin-bottom: 7px;
+            #channelTools {
+                display: none !important;
             }
 
-            #channelTools {
+            #channelBanPanel {
                 display: none;
+                margin-top: 8px;
+                padding: 8px;
+                border: 1px solid #333;
+                border-radius: 6px;
+                background: #161616;
+            }
+
+            .banEntry {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+                align-items: center;
+                padding: 7px 0;
+                border-bottom: 1px solid #282828;
+            }
+
+            .banEntry:last-child {
+                border-bottom: none;
+            }
+
+            .banEntry strong {
+                display: block;
+                color: #eee;
+                font-size: 0.82rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .banEntry span {
+                display: block;
+                margin-top: 2px;
+                color: #888;
+                font-size: 0.72rem;
+            }
+
+            .banEntry button {
+                padding: 5px 8px;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-size: 0.75rem;
             }
 
             .channelEmpty {
@@ -435,9 +500,142 @@
             }
 
             #roomTools {
-                display: flex;
+                display: none !important;
                 flex-direction: column;
                 gap: 7px;
+            }
+
+            #roomCustomizePanel {
+                display: none;
+                gap: 7px;
+                padding: 8px;
+                border: 1px solid #333;
+                border-radius: 6px;
+                background: #161616;
+            }
+
+            #roomCustomizePanel label {
+                display: grid;
+                gap: 4px;
+                color: #aaa;
+                font-size: 0.74rem;
+                text-align: left;
+            }
+
+            #roomCustomizePanel input,
+            #roomCustomizePanel select,
+            #roomCustomizePanel textarea {
+                width: 100%;
+                padding: 7px 8px;
+                background: #101010;
+                border: 1px solid #333;
+                border-radius: 4px;
+                color: white;
+                font: inherit;
+            }
+
+            #roomCustomizePanel textarea {
+                min-height: 58px;
+                resize: vertical;
+            }
+
+            #roomCustomizeFields {
+                display: grid;
+                gap: 7px;
+            }
+
+            #roomCustomizeButton {
+                width: 100%;
+                padding: 8px 10px;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-weight: bold;
+            }
+
+            #roomModePanel {
+                display: none;
+                margin: 8px 0 0;
+                padding: 8px 12px;
+                border: 1px solid #333;
+                background: #151515;
+                text-align: left;
+            }
+
+            #roomModePanel.visible {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 14px;
+            }
+
+            .roomModeHeader {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 10px;
+                margin: 0;
+                min-width: 190px;
+            }
+
+            .roomModeHeader h3 {
+                margin: 0;
+                color: #4caf50;
+                font-size: 0.95rem;
+            }
+
+            .roomModeHeader span,
+            .roomModeMeta {
+                color: #888;
+                font-size: 0.74rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .roomModeBody {
+                flex: 1;
+                min-width: 160px;
+                color: #ccc;
+                font-size: 0.86rem;
+                line-height: 1.4;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .roomModeActions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 7px;
+                margin: 0;
+            }
+
+            .roomModeActions a,
+            .roomModeActions button,
+            .roomModeChip {
+                display: inline-flex;
+                align-items: center;
+                padding: 5px 8px;
+                border: 1px solid #444;
+                border-radius: 4px;
+                color: #ddd;
+                text-decoration: none;
+                font-size: 0.76rem;
+            }
+
+            .roomModeActions a,
+            .roomModeActions button {
+                border-color: #4caf50;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+            }
+
+            .roomModeActions button:hover {
+                background: #2f6f32;
+                color: white;
             }
 
             /* --- Game Container --- */
@@ -523,11 +721,11 @@
             #roomBar {
                 width: 100%;
                 margin: 0;
-                padding: 12px 14px;
+                padding: 9px 12px;
                 display: flex;
                 align-items: center;
                 flex-wrap: wrap;
-                gap: 18px;
+                gap: 14px;
                 background: #181818;
                 border: 1px solid #333;
             }
@@ -554,12 +752,46 @@
                 white-space: nowrap;
             }
 
+            #roomBarActions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 7px;
+                margin-left: auto;
+            }
+
+            #roomBarActions button {
+                display: none;
+                align-items: center;
+                padding: 6px 9px;
+                border: 1px solid #4caf50;
+                border-radius: 4px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 0.76rem;
+            }
+
+            #roomBarActions button:hover:not(:disabled) {
+                background: #2f6f32;
+                color: white;
+            }
+
+            #roomBarActions button:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+
             #channelHome {
                 margin: 0 0 12px;
                 padding: 14px;
                 border: 1px solid #333;
                 background: #181818;
                 text-align: left;
+            }
+
+            #channelHome.hidden {
+                display: none;
             }
 
             .channelHomeHeader {
@@ -599,7 +831,8 @@
             }
 
             .channelHomeAction,
-            .channelHomeRoom button {
+            .channelHomeRoom button,
+            .manageActions button {
                 padding: 7px 10px;
                 border: 1px solid #4caf50;
                 border-radius: 4px;
@@ -621,18 +854,21 @@
             }
 
             .channelHomeAction:hover:not(:disabled),
-            .channelHomeRoom button:hover:not(:disabled) {
+            .channelHomeRoom button:hover:not(:disabled),
+            .manageActions button:hover:not(:disabled) {
                 background: #2f6f32;
                 color: white;
             }
 
-            .channelHomeAction.danger:hover:not(:disabled) {
+            .channelHomeAction.danger:hover:not(:disabled),
+            .manageActions button.danger:hover:not(:disabled) {
                 background: #d32f2f;
                 color: white;
             }
 
             .channelHomeAction:disabled,
-            .channelHomeRoom button:disabled {
+            .channelHomeRoom button:disabled,
+            .manageActions button:disabled {
                 opacity: 0.55;
                 cursor: not-allowed;
             }
@@ -714,6 +950,396 @@
             .channelHomeRoomInfo span {
                 color: #888;
                 font-size: 0.74rem;
+            }
+
+            .channelHomeRoomActions {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 6px;
+            }
+
+            #channelBrowserOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 2400;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                background: rgba(0, 0, 0, 0.78);
+            }
+
+            #channelBrowserOverlay.open {
+                display: flex;
+            }
+
+            #channelBrowserWindow {
+                display: flex;
+                flex-direction: column;
+                width: min(900px, 100%);
+                max-height: min(760px, calc(100vh - 48px));
+                border: 1px solid #383838;
+                border-radius: 8px;
+                background: #171717;
+                box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+                overflow: hidden;
+                text-align: left;
+            }
+
+            #channelBrowserHeader {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 14px;
+                padding: 16px 18px;
+                border-bottom: 1px solid #303030;
+            }
+
+            #channelBrowserHeader span {
+                display: block;
+                color: #888;
+                font-size: 0.7rem;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+            }
+
+            #channelBrowserHeader h2 {
+                margin: 2px 0 0;
+                color: #4caf50;
+                font-size: 1.15rem;
+            }
+
+            #channelBrowserClose {
+                border: none;
+                background: transparent;
+                color: #888;
+                cursor: pointer;
+                font-size: 1.3rem;
+            }
+
+            #channelBrowserClose:hover {
+                color: white;
+            }
+
+            #channelBrowserFilters {
+                display: grid;
+                grid-template-columns: minmax(220px, 1fr) 170px;
+                gap: 10px;
+                padding: 14px 18px;
+                border-bottom: 1px solid #2c2c2c;
+                background: #151515;
+            }
+
+            #channelBrowserFilters #channelBrowserSearch {
+                width: 100%;
+                margin: 0;
+            }
+
+            #channelBrowserToggles {
+                grid-column: 1 / -1;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            #channelBrowserToggles label {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 8px;
+                border: 1px solid #303030;
+                border-radius: 5px;
+                background: #1f1f1f;
+                color: #aaa;
+                font-size: 0.78rem;
+            }
+
+            #channelBrowserStats {
+                min-height: 32px;
+                padding: 9px 18px;
+                border-bottom: 1px solid #2c2c2c;
+                color: #888;
+                font-size: 0.78rem;
+            }
+
+            #channelBrowserResults {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 10px;
+                overflow-y: auto;
+                padding: 14px 18px 18px;
+            }
+
+            .channelBrowserCard {
+                display: grid;
+                gap: 10px;
+                align-content: start;
+                min-width: 0;
+                padding: 12px;
+                border: 1px solid #303030;
+                border-radius: 6px;
+                background: #1f1f1f;
+            }
+
+            .channelBrowserCard.current {
+                border-color: #4caf50;
+                background: #1f2b20;
+            }
+
+            .channelBrowserCardHeader {
+                display: grid;
+                gap: 3px;
+                min-width: 0;
+            }
+
+            .channelBrowserCardHeader strong {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                color: #eee;
+                font-size: 0.98rem;
+            }
+
+            .channelBrowserCardHeader span,
+            .channelBrowserDescription {
+                color: #888;
+                font-size: 0.78rem;
+            }
+
+            .channelBrowserDescription {
+                min-height: 2.7em;
+                line-height: 1.35;
+            }
+
+            .channelBrowserMeta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .channelBrowserMeta span {
+                padding: 4px 7px;
+                border: 1px solid #333;
+                border-radius: 999px;
+                color: #aaa;
+                font-size: 0.72rem;
+            }
+
+            .channelBrowserActions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 7px;
+            }
+
+            .channelBrowserActions button {
+                padding: 7px 10px;
+                border: 1px solid #4caf50;
+                border-radius: 5px;
+                background: transparent;
+                color: #4caf50;
+                cursor: pointer;
+                font-size: 0.78rem;
+            }
+
+            .channelBrowserActions button.primary {
+                background: #4caf50;
+                color: white;
+                font-weight: bold;
+            }
+
+            .channelBrowserActions button:hover:not(:disabled) {
+                background: #4caf50;
+                color: white;
+            }
+
+            .channelBrowserActions button:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+
+            #manageOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 2450;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                background: rgba(0, 0, 0, 0.78);
+            }
+
+            #manageOverlay.open {
+                display: flex;
+            }
+
+            #manageWindow {
+                display: flex;
+                flex-direction: column;
+                width: min(700px, 100%);
+                max-height: min(760px, calc(100vh - 48px));
+                border: 1px solid #383838;
+                border-radius: 8px;
+                background: #171717;
+                box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+                overflow: hidden;
+                text-align: left;
+            }
+
+            #manageHeader {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 14px;
+                padding: 16px 18px;
+                border-bottom: 1px solid #303030;
+            }
+
+            #manageHeader span {
+                display: block;
+                color: #888;
+                font-size: 0.7rem;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+            }
+
+            #manageHeader h2 {
+                margin: 2px 0 0;
+                color: #4caf50;
+                font-size: 1.15rem;
+            }
+
+            #manageClose {
+                border: none;
+                background: transparent;
+                color: #888;
+                cursor: pointer;
+                font-size: 1.3rem;
+            }
+
+            #manageClose:hover {
+                color: white;
+            }
+
+            #manageTabs {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                border-bottom: 1px solid #303030;
+            }
+
+            .manageTab {
+                padding: 11px;
+                border: none;
+                border-bottom: 2px solid transparent;
+                background: #1e1e1e;
+                color: #888;
+                cursor: pointer;
+            }
+
+            .manageTab.active {
+                color: #4caf50;
+                border-bottom-color: #4caf50;
+            }
+
+            #manageStatus {
+                min-height: 18px;
+                margin: 10px 18px 0;
+                color: #aaa;
+                font-size: 0.8rem;
+            }
+
+            #manageStatus.error {
+                color: #e57373;
+            }
+
+            .managePanel {
+                display: none;
+                overflow-y: auto;
+                padding: 14px 18px 18px;
+            }
+
+            .managePanel.active {
+                display: block;
+            }
+
+            .manageForm {
+                display: grid;
+                gap: 10px;
+            }
+
+            #roomSettingsFields {
+                display: grid;
+                gap: 10px;
+            }
+
+            .manageForm label {
+                display: grid;
+                gap: 5px;
+                color: #aaa;
+                font-size: 0.78rem;
+            }
+
+            .manageForm input,
+            .manageForm select,
+            .manageForm textarea {
+                width: 100%;
+                min-width: 0;
+                padding: 8px 9px;
+                border: 1px solid #333;
+                border-radius: 4px;
+                background: #101010;
+                color: white;
+                font: inherit;
+            }
+
+            .manageForm textarea {
+                min-height: 76px;
+                resize: vertical;
+                line-height: 1.35;
+            }
+
+            .manageToggle {
+                display: flex !important;
+                grid-template-columns: none !important;
+                align-items: center;
+                gap: 8px !important;
+            }
+
+            .manageToggle input {
+                width: auto;
+            }
+
+            .manageCode {
+                margin: 0;
+                color: #f2d17a;
+                font-family: monospace;
+                font-size: 0.78rem;
+            }
+
+            .manageActions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .manageActions button.primary {
+                background: #4caf50;
+                color: white;
+            }
+
+            .manageActions button.danger {
+                border-color: #d32f2f;
+                color: #ff8a80;
+                margin-left: auto;
+            }
+
+            #settingsBanPanel {
+                display: none;
+                margin-top: 10px;
+                padding: 8px;
+                border: 1px solid #333;
+                border-radius: 6px;
+                background: #161616;
             }
 
             /* ============================================================
@@ -1880,6 +2506,9 @@
                 }
 
                 #channelSidebar {
+                    position: static;
+                    max-height: none;
+                    overflow: visible;
                     min-height: 0;
                 }
 
@@ -1899,6 +2528,19 @@
                     width: 100%;
                     align-items: stretch;
                     flex-direction: column;
+                }
+
+                #roomBarActions {
+                    margin-left: 0;
+                }
+
+                #roomModePanel.visible {
+                    align-items: flex-start;
+                    flex-direction: column;
+                }
+
+                .roomModeBody {
+                    white-space: normal;
                 }
 
                 .channelHomeHeader,
@@ -1935,6 +2577,38 @@
                     min-height: 280px;
                 }
 
+                #channelBrowserOverlay {
+                    align-items: stretch;
+                    padding: 10px;
+                }
+
+                #manageOverlay {
+                    align-items: stretch;
+                    padding: 10px;
+                }
+
+                #channelBrowserWindow {
+                    max-height: calc(100vh - 20px);
+                }
+
+                #manageWindow {
+                    max-height: calc(100vh - 20px);
+                }
+
+                #channelBrowserFilters,
+                #channelBrowserResults {
+                    grid-template-columns: 1fr;
+                }
+
+                .channelHomeRoomActions,
+                .manageActions {
+                    justify-content: flex-start;
+                }
+
+                .manageActions button.danger {
+                    margin-left: 0;
+                }
+
                 #authCard,
                 #emailCard,
                 #helpCard,
@@ -1955,6 +2629,7 @@
         <div id="playerBar">
             <span>Welcome, <span class="player-name" id="playerBarName"></span>!</span>
             <div class="bar-right">
+                <button type="button" class="barButton" id="channelBrowserButton">Channel Browser</button>
                 <button type="button" class="barButton" id="friendsButton">Friends</button>
                 <button type="button" class="barButton" id="messagesButton">DMs</button>
                 <button id="avatarColorBtn" title="Customize avatar color"></button>
@@ -2138,13 +2813,14 @@
                     <div class="channelList" id="favoriteChannelList"></div>
                 </section>
                 <section class="channelSection">
-                    <h3>Channel Browser</h3>
-                    <input type="search" id="channelBrowserSearch" maxlength="64" placeholder="Search public channels" />
-                    <div class="channelList" id="publicChannelList"></div>
+                    <h3>Joined Channels</h3>
+                    <div class="channelList" id="memberChannelList"></div>
                 </section>
                 <section class="channelSection" id="channelTools">
                     <h3>Channel Tools</h3>
                     <button type="button" id="channelDeleteButton">Delete Channel</button>
+                    <button type="button" id="channelBanListButton">Manage Bans</button>
+                    <div id="channelBanPanel"></div>
                 </section>
                 <section class="channelSection" id="roomTools">
                     <h3>Room Tools</h3>
@@ -2159,8 +2835,15 @@
                         </select>
                         <textarea id="roomCreateDescription" maxlength="240" rows="3" placeholder="Room description (optional)"></textarea>
                     </form>
+                    <form id="roomCustomizePanel">
+                        <label>
+                            Room mode
+                            <select id="roomCustomizeMode"></select>
+                        </label>
+                        <div id="roomCustomizeFields"></div>
+                        <button type="submit" id="roomCustomizeButton">Save Customization</button>
+                    </form>
                     <button type="button" id="roomCloseButton">Close Current Room</button>
-                    <p id="roomError"></p>
                 </section>
             </aside>
 
@@ -2177,7 +2860,16 @@
                 <span>Room</span>
                 <strong id="currentRoomName">Town Square</strong>
             </div>
+            <div id="roomBarActions">
+                <button type="button" id="roomBarChannelInfoButton">Channel Info</button>
+                <button type="button" id="roomBarNewRoomButton">New Room</button>
+                <button type="button" id="roomBarChannelSettingsButton">Channel Settings</button>
+                <button type="button" id="roomBarRoomSettingsButton">Room Settings</button>
+            </div>
         </div>
+
+        <section id="roomModePanel" aria-live="polite"></section>
+        <p id="roomError"></p>
 
         <!-- ============================================================
              Page Layout
@@ -2236,6 +2928,96 @@
         </div>
 
             </main>
+        </div>
+
+        <div id="channelBrowserOverlay" aria-hidden="true">
+            <section id="channelBrowserWindow" role="dialog" aria-modal="true" aria-labelledby="channelBrowserTitle">
+                <div id="channelBrowserHeader">
+                    <div>
+                        <span>Discover</span>
+                        <h2 id="channelBrowserTitle">Channel Browser</h2>
+                    </div>
+                    <button type="button" id="channelBrowserClose" title="Close">x</button>
+                </div>
+                <div id="channelBrowserFilters">
+                    <input type="search" id="channelBrowserSearch" maxlength="64" placeholder="Search public channels" />
+                    <select id="channelBrowserSort" title="Sort channels">
+                        <option value="activity">Activity</option>
+                        <option value="members">Members</option>
+                        <option value="rooms">Rooms</option>
+                        <option value="newest">Newest</option>
+                        <option value="name">Name</option>
+                    </select>
+                    <div id="channelBrowserToggles">
+                        <label><input type="checkbox" id="channelBrowserUnjoinedToggle" /> Not joined</label>
+                        <label><input type="checkbox" id="channelBrowserActiveToggle" /> Online now</label>
+                        <label><input type="checkbox" id="channelBrowserRoomsToggle" /> Has rooms</label>
+                    </div>
+                </div>
+                <div id="channelBrowserStats"></div>
+                <div id="channelBrowserResults"></div>
+            </section>
+        </div>
+
+        <div id="manageOverlay" aria-hidden="true">
+            <section id="manageWindow" role="dialog" aria-modal="true" aria-labelledby="manageTitle">
+                <div id="manageHeader">
+                    <div>
+                        <span>Manage</span>
+                        <h2 id="manageTitle">Settings</h2>
+                    </div>
+                    <button type="button" id="manageClose" title="Close">x</button>
+                </div>
+                <div id="manageTabs">
+                    <button type="button" class="manageTab active" id="channelSettingsTab">Channel</button>
+                    <button type="button" class="manageTab" id="roomSettingsTab">Room</button>
+                </div>
+                <p id="manageStatus"></p>
+                <section id="channelSettingsPanel" class="managePanel active">
+                    <form id="channelSettingsForm" class="manageForm">
+                        <label>
+                            Channel name
+                            <input type="text" id="channelSettingsName" maxlength="32" />
+                        </label>
+                        <label>
+                            Description
+                            <textarea id="channelSettingsDescription" maxlength="240" rows="4"></textarea>
+                        </label>
+                        <label class="manageToggle">
+                            <input type="checkbox" id="channelSettingsPrivate" />
+                            Private channel
+                        </label>
+                        <p id="channelSettingsCode" class="manageCode"></p>
+                        <div class="manageActions">
+                            <button type="submit" class="primary" id="channelSettingsSave">Save Channel</button>
+                            <button type="button" id="settingsBanListButton">Manage Bans</button>
+                            <button type="button" class="danger" id="settingsDeleteChannelButton">Delete Channel</button>
+                        </div>
+                    </form>
+                    <div id="settingsBanPanel"></div>
+                </section>
+                <section id="roomSettingsPanel" class="managePanel">
+                    <form id="roomSettingsForm" class="manageForm">
+                        <label>
+                            Room name
+                            <input type="text" id="roomSettingsName" maxlength="32" />
+                        </label>
+                        <label>
+                            Description
+                            <textarea id="roomSettingsDescription" maxlength="240" rows="4"></textarea>
+                        </label>
+                        <label>
+                            Room mode
+                            <select id="roomSettingsMode"></select>
+                        </label>
+                        <div id="roomSettingsFields"></div>
+                        <div class="manageActions">
+                            <button type="submit" class="primary" id="roomSettingsSave">Save Room</button>
+                            <button type="button" class="danger" id="settingsCloseRoomButton">Close Room</button>
+                        </div>
+                    </form>
+                </section>
+            </section>
         </div>
 
         <!-- ============================================================
@@ -2314,6 +3096,8 @@
             <div class="contextAdminLabel" id="ctxListAdminLabel">Admin</div>
             <button id="ctxMute">Mute</button>
             <button id="ctxFreeze">Freeze</button>
+            <button id="ctxListChannelBan">Ban From Channel</button>
+            <button id="ctxListChannelKick">Kick From Channel</button>
             <div class="contextDivider" id="ctxListDivider"></div>
             <button id="ctxListViewProfile">View Profile</button>
         </div>
@@ -2326,6 +3110,8 @@
             <button id="ctxRemoveBot">Remove Bot</button>
             <button id="ctxCanvasMute">Mute</button>
             <button id="ctxCanvasFreeze">Freeze</button>
+            <button id="ctxCanvasChannelBan">Ban From Channel</button>
+            <button id="ctxCanvasChannelKick">Kick From Channel</button>
             <div class="contextDivider" id="ctxDivider"></div>
             <button id="ctxCanvasMessage">Message</button>
             <button id="ctxCanvasAddFriend">Add Friend</button>
@@ -2340,6 +3126,7 @@
             <button data-minutes="15">15 minutes</button>
             <button data-minutes="30">30 minutes</button>
             <button data-minutes="60">1 hour</button>
+            <button data-minutes="1440">24 hours</button>
             <button data-minutes="0">Permanent</button>
         </div>
 

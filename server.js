@@ -116,9 +116,87 @@ const MAX_CHANNEL_DESCRIPTION_LENGTH = 240;
 const MAX_ROOM_NAME_LENGTH = 32;
 const MAX_ROOM_DESCRIPTION_LENGTH = 240;
 const MAX_DIRECT_MESSAGE_LENGTH = 500;
+const MAX_CHANNEL_BAN_DURATION_MINUTES = 60 * 24 * 30;
 const CHANNEL_CODE_LENGTH = 6;
 const DEFAULT_ROOM_MODE = "social";
 const ROOM_MODES = new Set(["social", "watch", "game", "custom"]);
+const ROOM_MODE_DEFINITIONS = {
+    social: {
+        label: "Social",
+        defaultConfig: {
+            topic: "Open chat",
+            welcome: "Settle in and say hello.",
+            vibe: "casual"
+        },
+        settings: [
+            { key: "topic", label: "Topic", type: "text", maxLength: 80 },
+            { key: "welcome", label: "Welcome", type: "textarea", maxLength: 180 },
+            {
+                key: "vibe",
+                label: "Vibe",
+                type: "select",
+                options: [
+                    { value: "casual", label: "Casual" },
+                    { value: "roleplay", label: "Roleplay" },
+                    { value: "support", label: "Support" },
+                    { value: "showcase", label: "Showcase" }
+                ]
+            }
+        ]
+    },
+    watch: {
+        label: "Watch",
+        defaultConfig: {
+            streamTitle: "Watch Party",
+            streamUrl: "",
+            hostNote: ""
+        },
+        settings: [
+            { key: "streamTitle", label: "Title", type: "text", maxLength: 80 },
+            { key: "streamUrl", label: "Stream URL", type: "url", maxLength: 240 },
+            { key: "hostNote", label: "Host Note", type: "textarea", maxLength: 180 }
+        ]
+    },
+    game: {
+        label: "Game",
+        defaultConfig: {
+            gameKey: "realm-rush",
+            roundLength: 180,
+            scoreLimit: 10
+        },
+        settings: [
+            {
+                key: "gameKey",
+                label: "Game",
+                type: "select",
+                options: [
+                    { value: "realm-rush", label: "Realm Rush" },
+                    { value: "tile-capture", label: "Tile Capture" },
+                    { value: "trivia-arena", label: "Trivia Arena" }
+                ]
+            },
+            { key: "roundLength", label: "Round Seconds", type: "number", min: 30, max: 900, step: 30 },
+            { key: "scoreLimit", label: "Score Limit", type: "number", min: 1, max: 100, step: 1 }
+        ]
+    },
+    custom: {
+        label: "Custom",
+        defaultConfig: {
+            panelTitle: "Custom Room",
+            panelBody: "Add your own room prompt, links, or event details.",
+            accentColor: "#4caf50",
+            actionLabel: "",
+            actionUrl: ""
+        },
+        settings: [
+            { key: "panelTitle", label: "Panel Title", type: "text", maxLength: 80 },
+            { key: "panelBody", label: "Panel Text", type: "textarea", maxLength: 240 },
+            { key: "accentColor", label: "Accent", type: "color" },
+            { key: "actionLabel", label: "Action Label", type: "text", maxLength: 32 },
+            { key: "actionUrl", label: "Action URL", type: "url", maxLength: 240 }
+        ]
+    }
+};
 
 const channels = {
     [DEFAULT_CHANNEL_ID]: {
@@ -144,6 +222,33 @@ const rooms = {
         isDefault: true
     }
 };
+
+function ensureDefaultWorldInMemory() {
+    channels[DEFAULT_CHANNEL_ID] ||= {
+        id:        DEFAULT_CHANNEL_ID,
+        name:      "OpenRealm",
+        ownerUserId: null,
+        ownerName: "System",
+        code: null,
+        isPublic: true,
+        createdAt: Date.now(),
+        isDefault: true,
+        memberCount: 0
+    };
+
+    rooms[DEFAULT_ROOM_ID] ||= {
+        id:        DEFAULT_ROOM_ID,
+        name:      "Town Square",
+        description: "The main public gathering room for OpenRealm.",
+        mode:      DEFAULT_ROOM_MODE,
+        modeConfig: {},
+        channelId: DEFAULT_CHANNEL_ID,
+        ownerUserId: null,
+        ownerName: "System",
+        createdAt: Date.now(),
+        isDefault: true
+    };
+}
 
 function roomChannel(roomId) {
     return `room:${roomId}`;
@@ -191,17 +296,37 @@ function favoriteChannelIds(socket) {
         : [];
 }
 
+function timestampFromDateLike(value) {
+    if (!value) return null;
+    const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isFinite(time) ? time : null;
+}
+
+function isActiveChannelBan(membership) {
+    if (!membership || membership.status !== "banned") return false;
+    const expiresAt = timestampFromDateLike(membership.banExpiresAt);
+    return !expiresAt || expiresAt > Date.now();
+}
+
+function channelBanMessage(membership) {
+    const expiresAt = timestampFromDateLike(membership?.banExpiresAt);
+    if (!expiresAt) return "You are permanently banned from this channel.";
+    return `You are banned from this channel until ${new Date(expiresAt).toLocaleString()}.`;
+}
+
 function channelMembership(socket, channelId) {
     return socket?.data?.channelMemberships?.[channelId] || null;
 }
 
 function isChannelMember(socket, channelId) {
     const membership = channelMembership(socket, channelId);
-    return !!membership && membership.status === "active";
+    return !!membership && (membership.status === "active" || !isActiveChannelBan(membership));
 }
 
 function channelRole(socket, channelId) {
-    return channelMembership(socket, channelId)?.role || null;
+    const membership = channelMembership(socket, channelId);
+    if (isActiveChannelBan(membership)) return null;
+    return membership?.role || null;
 }
 
 function roleRank(role) {
@@ -209,7 +334,6 @@ function roleRank(role) {
 }
 
 function hasChannelRole(socket, channelId, minimumRole) {
-    if (socket?.data?.isAdmin) return true;
     return roleRank(channelRole(socket, channelId)) >= roleRank(minimumRole);
 }
 
@@ -223,7 +347,8 @@ function isChannelOwner(socket, channel) {
 function canEnterChannel(socket, channel) {
     if (!channel) return false;
     if (channel.isDefault && !socket?.data?.userId) return true;
-    return !!socket?.data?.isAdmin || isChannelMember(socket, channel.id);
+    if (isActiveChannelBan(channelMembership(socket, channel.id))) return false;
+    return isChannelMember(socket, channel.id);
 }
 
 function canManageRooms(socket, channel) {
@@ -232,12 +357,22 @@ function canManageRooms(socket, channel) {
 
 function canModerateChannel(socket, channel) {
     if (!socket || !channel) return false;
-    return !!socket.data.isAdmin || hasChannelRole(socket, channel.id, "moderator");
+    if (channel.isDefault) return !!socket.data.isAdmin;
+    return hasChannelRole(socket, channel.id, "moderator");
 }
 
 function canManageChannel(socket, channel) {
-    if (!socket || !channel || channel.isDefault) return false;
-    return !!socket.data.isAdmin || hasChannelRole(socket, channel.id, "admin");
+    if (!socket || !channel) return false;
+    if (channel.isDefault) return !!socket.data.isAdmin;
+    return hasChannelRole(socket, channel.id, "admin");
+}
+
+function canModerateChannelMember(socket, channel, targetMembership) {
+    if (!socket || !channel || !targetMembership) return false;
+    if (!canManageChannel(socket, channel)) return false;
+    if (targetMembership.role === "owner") return false;
+
+    return roleRank(channelRole(socket, channel.id)) > roleRank(targetMembership.role);
 }
 
 function canDeleteChannel(socket, channel) {
@@ -257,6 +392,13 @@ function canManageRoom(socket, room) {
     return canManageRooms(socket, channel);
 }
 
+function canCustomizeRoom(socket, room) {
+    if (!socket || !room) return false;
+    const channel = channels[room.channelId || DEFAULT_CHANNEL_ID];
+    if (!channel || channel.isDefault) return !!socket?.data?.isAdmin;
+    return canManageChannel(socket, channel) || canManageRooms(socket, channel);
+}
+
 function publicChannel(channel, socket = null) {
     const channelRooms = Object.values(rooms)
         .filter(room => room.channelId === channel.id)
@@ -268,6 +410,7 @@ function publicChannel(channel, socket = null) {
     const channelRoomIds = new Set(channelRooms.map(room => room.id));
     const favoriteIds = favoriteChannelIds(socket);
     const isMember = canEnterChannel(socket, channel);
+    const isBanned = isActiveChannelBan(channelMembership(socket, channel.id));
     const includeCode = !!channel.code && (
         socket?.data?.channelId === channel.id ||
         isMember ||
@@ -285,7 +428,8 @@ function publicChannel(channel, socket = null) {
         isMember,
         role:        channelRole(socket, channel.id),
         isFavorite:  favoriteIds.includes(channel.id),
-        canJoin:     !!socket?.data?.userId && !isMember && !!channel.isPublic,
+        isBanned,
+        canJoin:     !!socket?.data?.userId && !isMember && !!channel.isPublic && !isBanned,
         roomsHidden: !isMember && !channel.isPublic && channelRooms.length > 0,
         canManage:   canManageChannel(socket, channel),
         canManageRooms: canManageRooms(socket, channel),
@@ -319,12 +463,15 @@ function publicChannelsForSocket(socket = null) {
 
 function publicRoom(room, socket = null) {
     const roomPlayers = Object.values(players).filter(p => p.roomId === room.id);
+    const mode = sanitizeRoomMode(room.mode);
 
     return {
         id:          room.id,
         name:        room.name,
         description: room.description || "",
-        mode:        room.mode || DEFAULT_ROOM_MODE,
+        mode,
+        modeLabel:   roomModeDefinition(mode).label,
+        modeConfig:  sanitizeRoomModeConfig(mode, room.modeConfig),
         channelId:   room.channelId || DEFAULT_CHANNEL_ID,
         ownerName:   room.ownerName,
         code:        null,
@@ -332,6 +479,7 @@ function publicRoom(room, socket = null) {
         createdAt:   room.createdAt,
         isDefault:   !!room.isDefault,
         canClose:    canManageRoom(socket, room),
+        canCustomize: canCustomizeRoom(socket, room),
         playerCount: roomPlayers.filter(p => !p.isBot).length,
         botCount:    roomPlayers.filter(p => p.isBot).length
     };
@@ -339,12 +487,15 @@ function publicRoom(room, socket = null) {
 
 function publicRoomPreview(room) {
     const roomPlayers = Object.values(players).filter(p => p.roomId === room.id);
+    const mode = sanitizeRoomMode(room.mode);
 
     return {
         id:          room.id,
         name:        room.name,
         description: room.description || "",
-        mode:        room.mode || DEFAULT_ROOM_MODE,
+        mode,
+        modeLabel:   roomModeDefinition(mode).label,
+        modeConfig:  sanitizeRoomModeConfig(mode, room.modeConfig),
         channelId:   room.channelId || DEFAULT_CHANNEL_ID,
         ownerName:   room.ownerName,
         createdAt:   room.createdAt,
@@ -577,6 +728,80 @@ function sanitizeRoomMode(mode) {
     return ROOM_MODES.has(mode) ? mode : DEFAULT_ROOM_MODE;
 }
 
+function roomModeDefinition(mode) {
+    return ROOM_MODE_DEFINITIONS[sanitizeRoomMode(mode)] || ROOM_MODE_DEFINITIONS[DEFAULT_ROOM_MODE];
+}
+
+function publicRoomModeDefinitions() {
+    return Object.entries(ROOM_MODE_DEFINITIONS).reduce((defs, [mode, definition]) => {
+        defs[mode] = {
+            label: definition.label,
+            defaultConfig: { ...definition.defaultConfig },
+            settings: definition.settings.map(setting => ({
+                ...setting,
+                options: Array.isArray(setting.options)
+                    ? setting.options.map(option => ({ ...option }))
+                    : undefined
+            }))
+        };
+        return defs;
+    }, {});
+}
+
+function sanitizeRoomModeConfig(mode, config = {}) {
+    const definition = roomModeDefinition(mode);
+    const source = config && typeof config === "object" ? config : {};
+    const sanitized = {};
+
+    for (const setting of definition.settings) {
+        const fallback = definition.defaultConfig[setting.key];
+        const rawValue = source[setting.key] ?? fallback;
+
+        if (setting.type === "number") {
+            const value = Number(rawValue);
+            const min = Number.isFinite(setting.min) ? setting.min : Number.MIN_SAFE_INTEGER;
+            const max = Number.isFinite(setting.max) ? setting.max : Number.MAX_SAFE_INTEGER;
+            sanitized[setting.key] = Number.isFinite(value)
+                ? Math.max(min, Math.min(max, value))
+                : fallback;
+        } else if (setting.type === "select") {
+            const allowed = new Set((setting.options || []).map(option => option.value));
+            sanitized[setting.key] = allowed.has(rawValue) ? rawValue : fallback;
+        } else if (setting.type === "url") {
+            const value = typeof rawValue === "string"
+                ? rawValue.trim().slice(0, setting.maxLength || 240)
+                : "";
+            if (!value) {
+                sanitized[setting.key] = "";
+            } else {
+                try {
+                    const parsed = new URL(value);
+                    sanitized[setting.key] = ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : "";
+                } catch (e) {
+                    sanitized[setting.key] = "";
+                }
+            }
+        } else if (setting.type === "color") {
+            sanitized[setting.key] = typeof rawValue === "string" && /^#[0-9a-fA-F]{6}$/.test(rawValue)
+                ? rawValue
+                : fallback;
+        } else {
+            sanitized[setting.key] = typeof rawValue === "string"
+                ? rawValue.trim().replace(/\s+/g, " ").slice(0, setting.maxLength || 120)
+                : fallback;
+        }
+    }
+
+    return sanitized;
+}
+
+function normalizeChannelBanDuration(duration) {
+    if (duration === null || duration === undefined) return null;
+    const minutes = Math.floor(Number(duration));
+    if (!Number.isFinite(minutes) || minutes <= 0) return null;
+    return Math.min(minutes, MAX_CHANNEL_BAN_DURATION_MINUTES);
+}
+
 function clampSpawnPosition(x, y, size = 20) {
     return {
         x: Math.max(0, Math.min(Number(x) || 400, WORLD_WIDTH - size)),
@@ -629,11 +854,13 @@ function normalizeChannelDoc(doc) {
 }
 
 function normalizeRoomDoc(doc) {
+    const mode = sanitizeRoomMode(doc.mode);
     return {
         id:          doc.roomId,
         name:        doc.name,
         description: doc.description || "",
-        mode:        sanitizeRoomMode(doc.mode),
+        mode,
+        modeConfig:  sanitizeRoomModeConfig(mode, doc.modeConfig),
         channelId:   doc.channelId || DEFAULT_CHANNEL_ID,
         ownerUserId: doc.ownerUserId ? String(doc.ownerUserId) : null,
         ownerName:   doc.ownerName,
@@ -662,16 +889,56 @@ async function generateChannelCode() {
 
 function normalizeMembershipDoc(doc) {
     return {
-        channelId: doc.channelId,
-        userId:    String(doc.userId),
-        username:  doc.username,
-        role:      doc.role || "member",
-        status:    doc.status || "active"
+        channelId:        doc.channelId,
+        userId:           String(doc.userId),
+        username:         doc.username,
+        role:             doc.role || "member",
+        status:           doc.status || "active",
+        banExpiresAt:     timestampFromDateLike(doc.banExpiresAt),
+        bannedAt:         timestampFromDateLike(doc.bannedAt),
+        bannedByUserId:   doc.bannedByUserId ? String(doc.bannedByUserId) : null,
+        bannedByUsername: doc.bannedByUsername || ""
     };
 }
 
+async function releaseExpiredChannelBansForUser(userId) {
+    if (!userId) return;
+    const expired = await ChannelMember.find(
+        {
+            userId,
+            status: "banned",
+            banExpiresAt: { $ne: null, $lte: new Date() }
+        },
+        "channelId"
+    );
+    if (!expired.length) return;
+
+    await ChannelMember.updateMany(
+        {
+            userId,
+            status: "banned",
+            banExpiresAt: { $ne: null, $lte: new Date() }
+        },
+        {
+            $set: {
+                status: "active",
+                banExpiresAt: null,
+                bannedAt: null,
+                bannedByUserId: null,
+                bannedByUsername: ""
+            }
+        }
+    );
+    await Promise.all([...new Set(expired.map(membership => membership.channelId))]
+        .map(channelId => refreshChannelMemberCount(channelId)));
+}
+
 async function loadChannelMembershipMap(userId) {
-    const docs = await ChannelMember.find({ userId, status: "active" });
+    await releaseExpiredChannelBansForUser(userId);
+    const docs = await ChannelMember.find({
+        userId,
+        status: { $in: ["active", "banned"] }
+    });
     return docs.reduce((map, doc) => {
         const membership = normalizeMembershipDoc(doc);
         map[membership.channelId] = membership;
@@ -681,13 +948,25 @@ async function loadChannelMembershipMap(userId) {
 
 async function upsertChannelMembership({ channelId, userId, username, role = "member", status = "active" }) {
     const existing = await ChannelMember.findOne({ channelId, userId });
+    if (existing && isActiveChannelBan(normalizeMembershipDoc(existing))) {
+        return normalizeMembershipDoc(existing);
+    }
+
     const resolvedRole = existing && roleRank(existing.role) > roleRank(role)
         ? existing.role
         : role;
     const result = await ChannelMember.findOneAndUpdate(
         { channelId, userId },
         {
-            $set: { username, role: resolvedRole, status },
+            $set: {
+                username,
+                role: resolvedRole,
+                status,
+                banExpiresAt: null,
+                bannedAt: null,
+                bannedByUserId: null,
+                bannedByUsername: ""
+            },
             $setOnInsert: { joinedAt: new Date() }
         },
         { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
@@ -713,6 +992,11 @@ async function ensureSocketChannelMembership(socket, channel, role = "member") {
 
     socket.data.channelMemberships ||= {};
     socket.data.channelMemberships[channel.id] = membership;
+    if (isActiveChannelBan(membership)) {
+        const error = new Error(channelBanMessage(membership));
+        error.code = "CHANNEL_BANNED";
+        throw error;
+    }
     await refreshChannelMemberCount(channel.id);
     return membership;
 }
@@ -773,13 +1057,15 @@ async function createChannelRecord({ name, description = "", ownerUserId, ownerN
     return channel;
 }
 
-async function createRoomRecord({ name, description = "", mode = DEFAULT_ROOM_MODE, channelId, ownerUserId, ownerName }) {
+async function createRoomRecord({ name, description = "", mode = DEFAULT_ROOM_MODE, modeConfig = {}, channelId, ownerUserId, ownerName }) {
     const roomId = `room_${crypto.randomBytes(8).toString("hex")}`;
+    const roomMode = sanitizeRoomMode(mode);
     const doc = await Room.create({
         roomId,
         name,
         description,
-        mode: sanitizeRoomMode(mode),
+        mode: roomMode,
+        modeConfig: sanitizeRoomModeConfig(roomMode, modeConfig),
         channelId: channelId || DEFAULT_CHANNEL_ID,
         ownerUserId,
         ownerName,
@@ -826,6 +1112,11 @@ async function initializeWorldFromDb() {
     await Room.updateMany(
         { isActive: true, $or: [{ mode: { $exists: false } }, { mode: null }] },
         { $set: { mode: DEFAULT_ROOM_MODE } }
+    );
+
+    await Room.updateMany(
+        { isActive: true, $or: [{ modeConfig: { $exists: false } }, { modeConfig: null }] },
+        { $set: { modeConfig: {} } }
     );
 
     await Channel.updateMany(
@@ -878,9 +1169,6 @@ async function initializeWorldFromDb() {
         });
     }
 
-    for (const key of Object.keys(channels)) delete channels[key];
-    for (const key of Object.keys(rooms)) delete rooms[key];
-
     const activeMemberCounts = await ChannelMember.aggregate([
         { $match: { status: "active" } },
         { $group: { _id: "$channelId", count: { $sum: 1 } } }
@@ -889,6 +1177,9 @@ async function initializeWorldFromDb() {
         map[entry._id] = entry.count;
         return map;
     }, {});
+
+    for (const key of Object.keys(channels)) delete channels[key];
+    for (const key of Object.keys(rooms)) delete rooms[key];
 
     activeChannels.forEach((doc) => {
         const channel = normalizeChannelDoc(doc);
@@ -1099,28 +1390,136 @@ function firstRoomIdInChannel(channelId, excludeRoomId = null) {
 }
 
 function fallbackRoomIdForClosedRoom(room) {
+    ensureDefaultWorldInMemory();
     return firstRoomIdInChannel(room.channelId || DEFAULT_CHANNEL_ID, room.id) || DEFAULT_ROOM_ID;
 }
 
+function resolveJoinRoom(socket, requestedRoomId = null) {
+    ensureDefaultWorldInMemory();
+
+    const candidates = [
+        typeof requestedRoomId === "string" ? rooms[requestedRoomId] : null,
+        rooms[DEFAULT_ROOM_ID],
+        ...Object.values(rooms)
+    ].filter(Boolean);
+
+    for (const room of candidates) {
+        const channel = channels[room.channelId || DEFAULT_CHANNEL_ID];
+        if (canEnterChannel(socket, channel)) return room;
+    }
+
+    return null;
+}
+
+function roomIdsInChannel(channelId) {
+    return new Set(
+        Object.values(rooms)
+            .filter(room => (room.channelId || DEFAULT_CHANNEL_ID) === channelId)
+            .map(room => room.id)
+    );
+}
+
+function playerSocketIsInChannel(socket, channelId) {
+    const roomIds = roomIdsInChannel(channelId);
+    return roomIds.has(players[socket.id]?.roomId || DEFAULT_ROOM_ID)
+        || socket.data.channelId === channelId;
+}
+
+async function removeFavoriteChannelForUser(userId, channelId) {
+    await User.updateOne(
+        { _id: userId },
+        { $pull: { favoriteChannels: channelId } }
+    );
+}
+
+async function moveUserOutOfChannel(userId, channel, notice, options = {}) {
+    const targetSocket = findOnlineSocketByUserId(userId);
+    if (!targetSocket) return;
+
+    if (Array.isArray(targetSocket.data.favoriteChannels)) {
+        targetSocket.data.favoriteChannels = targetSocket.data.favoriteChannels
+            .filter(id => id !== channel.id);
+    }
+    if (options.membership) {
+        targetSocket.data.channelMemberships ||= {};
+        targetSocket.data.channelMemberships[channel.id] = options.membership;
+    } else if (targetSocket.data.channelMemberships) {
+        delete targetSocket.data.channelMemberships[channel.id];
+    }
+
+    if (players[targetSocket.id] && playerSocketIsInChannel(targetSocket, channel.id)) {
+        movePlayerToRoom(targetSocket, DEFAULT_ROOM_ID, { announce: false });
+    } else {
+        targetSocket.emit("channelList", publicChannelsForSocket(targetSocket));
+        targetSocket.emit("roomList", publicRoomsForSocket(targetSocket));
+    }
+
+    targetSocket.emit("channelModerationNotice", {
+        channelId: channel.id,
+        message: notice
+    });
+}
+
+function publicBannedMember(membership) {
+    const normalized = normalizeMembershipDoc(membership);
+    return {
+        userId: normalized.userId,
+        username: normalized.username,
+        banExpiresAt: normalized.banExpiresAt,
+        bannedAt: normalized.bannedAt,
+        bannedByUsername: normalized.bannedByUsername
+    };
+}
+
+async function sendChannelBanList(socket, channel) {
+    if (!socket || !channel || !canManageChannel(socket, channel)) return;
+    const bannedMembers = await ChannelMember.find({
+        channelId: channel.id,
+        status: "banned"
+    }).sort({ bannedAt: -1, updatedAt: -1 });
+
+    socket.emit("channelBanList", {
+        channelId: channel.id,
+        bans: bannedMembers
+            .map(publicBannedMember)
+            .filter(member => !member.banExpiresAt || member.banExpiresAt > Date.now())
+    });
+}
+
 function sendRoomState(socket, roomId) {
-    const room = rooms[roomId] || rooms[DEFAULT_ROOM_ID];
+    const room = resolveJoinRoom(socket, roomId);
+    if (!room) {
+        socket.emit("roomError", { message: "No rooms are available right now." });
+        socket.emit("channelList", publicChannelsForSocket(socket));
+        socket.emit("roomList", publicRoomsForSocket(socket));
+        return false;
+    }
+
     const channel = channels[room.channelId || DEFAULT_CHANNEL_ID] || channels[DEFAULT_CHANNEL_ID];
     socket.data.channelId = channel.id;
     socket.emit("channelChanged", { channel: publicChannel(channel, socket) });
     socket.emit("roomChanged", { room: publicRoom(room, socket) });
+    socket.emit("roomRuntime", {
+        roomId: room.id,
+        mode: sanitizeRoomMode(room.mode),
+        modeConfig: sanitizeRoomModeConfig(room.mode, room.modeConfig)
+    });
     socket.emit("roomList", publicRoomsForSocket(socket, channel.id));
     socket.emit("currentPlayers", publicPlayersSnapshot(room.id));
+    return true;
 }
 
 function movePlayerToRoom(socket, roomId, { announce = true, resetPosition = true } = {}) {
     const player = players[socket.id];
     if (!player) return;
 
-    const requestedRoom = rooms[roomId] || rooms[DEFAULT_ROOM_ID];
-    const requestedChannel = channels[requestedRoom.channelId || DEFAULT_CHANNEL_ID];
-    const targetRoomId = requestedRoom && canEnterChannel(socket, requestedChannel)
-        ? requestedRoom.id
-        : DEFAULT_ROOM_ID;
+    const requestedRoom = resolveJoinRoom(socket, roomId);
+    if (!requestedRoom) {
+        socket.emit("roomError", { message: "No rooms are available right now." });
+        return;
+    }
+
+    const targetRoomId = requestedRoom.id;
     const oldRoomId = player.roomId || socket.data.roomId || DEFAULT_ROOM_ID;
 
     if (oldRoomId === targetRoomId) {
@@ -1156,7 +1555,7 @@ function movePlayerToRoom(socket, roomId, { announce = true, resetPosition = tru
     if (announce) {
         io.to(roomChannel(targetRoomId)).emit("chatMessage", {
             name:    "System",
-            message: `${player.name} entered ${rooms[targetRoomId].name}`
+            message: `${player.name} entered ${rooms[targetRoomId]?.name || requestedRoom.name || "the room"}`
         });
     }
 
@@ -1171,6 +1570,7 @@ function movePlayerToRoom(socket, roomId, { announce = true, resetPosition = tru
 
 io.on("connection", (socket) => {
     console.log("Player connected:", socket.id);
+    ensureDefaultWorldInMemory();
     socket.data.roomId = DEFAULT_ROOM_ID;
     socket.data.channelId = DEFAULT_CHANNEL_ID;
     socket.join(roomChannel(DEFAULT_ROOM_ID));
@@ -1179,6 +1579,7 @@ io.on("connection", (socket) => {
     // This lets unauthenticated visitors see other players moving around
     // before they decide to register. They receive the same playerMoved
     // broadcasts as everyone else, so the view stays live.
+    socket.emit("roomModeDefinitions", publicRoomModeDefinitions());
     socket.emit("channelList", publicChannelsForSocket(socket));
     socket.emit("roomList", publicRoomsForSocket(socket));
     sendRoomState(socket, DEFAULT_ROOM_ID);
@@ -1246,15 +1647,12 @@ io.on("connection", (socket) => {
         // if the conversion fails (e.g. the client sent a string like "abc").
         const requestedX = Math.max(0, Math.min(Number(data.x) || 400, WORLD_WIDTH));
         const requestedY = Math.max(0, Math.min(Number(data.y) || 300, WORLD_HEIGHT));
-        const requestedRoom = typeof data.roomId === "string" && rooms[data.roomId]
-            ? rooms[data.roomId]
-            : rooms[DEFAULT_ROOM_ID];
-        const requestedChannel = channels[requestedRoom.channelId || DEFAULT_CHANNEL_ID];
-        const roomId = canEnterChannel(socket, requestedChannel)
-            && typeof data.roomId === "string"
-            && rooms[data.roomId]
-            ? data.roomId
-            : DEFAULT_ROOM_ID;
+        const requestedRoom = resolveJoinRoom(socket, data.roomId);
+        if (!requestedRoom) {
+            socket.emit("joinDenied", { message: "No rooms are available right now. Please try again." });
+            return;
+        }
+        const roomId = requestedRoom.id;
         const spawn = pickSpawnPosition(roomId, requestedX, requestedY);
 
         // --- Duplicate Login Check ---
@@ -1349,7 +1747,7 @@ io.on("connection", (socket) => {
         // io.emit() sends to ALL clients including the sender.
         io.to(roomChannel(roomId)).emit("chatMessage", {
             name: "System",
-            message: `${name} entered ${rooms[roomId].name}`
+            message: `${name} entered ${rooms[roomId]?.name || requestedRoom.name || "the room"}`
         });
 
         // A spectator just became a player — spectator count goes down.
@@ -1537,6 +1935,11 @@ io.on("connection", (socket) => {
 
             movePlayerToRoom(socket, friendRoom.id);
         } catch (e) {
+            if (e.code === "CHANNEL_BANNED") {
+                socket.emit("friendError", { message: e.message });
+                await sendFriendList(socket);
+                return;
+            }
             console.error("joinFriend error:", e.message);
             socket.emit("friendError", { message: "Unable to join that friend right now." });
         }
@@ -1679,6 +2082,11 @@ io.on("connection", (socket) => {
                 socket.emit("channelError", { message: "Channel saved. It has no rooms yet." });
             }
         } catch (e) {
+            if (e.code === "CHANNEL_BANNED") {
+                socket.emit("channelError", { message: e.message });
+                socket.emit("channelList", publicChannelsForSocket(socket));
+                return;
+            }
             console.error("joinChannelByCode error:", e.message);
             socket.emit("channelError", { message: "Unable to join channel right now." });
         }
@@ -1703,6 +2111,11 @@ io.on("connection", (socket) => {
                 await ensureSocketChannelMembership(socket, channel, "member");
             }
         } catch (e) {
+            if (e.code === "CHANNEL_BANNED") {
+                socket.emit("channelError", { message: e.message });
+                socket.emit("channelList", publicChannelsForSocket(socket));
+                return;
+            }
             console.error("joinChannel membership error:", e.message);
             socket.emit("channelError", { message: "Unable to join channel right now." });
             return;
@@ -1718,6 +2131,72 @@ io.on("connection", (socket) => {
         }
 
         movePlayerToRoom(socket, roomId);
+    });
+
+    socket.on("updateChannel", async ({ channelId, name, description, isPrivate, isPublic } = {}) => {
+        if (!players[socket.id]) return;
+        const channel = typeof channelId === "string" ? channels[channelId] : null;
+
+        if (!channel) {
+            socket.emit("channelError", { message: "That channel cannot be edited." });
+            return;
+        }
+        if (!canManageChannel(socket, channel)) {
+            socket.emit("channelError", { message: "Only channel admins can edit this channel." });
+            return;
+        }
+
+        const channelName = sanitizeChannelName(name);
+        const channelDescription = sanitizeChannelDescription(description);
+        const nextIsPublic = typeof isPublic === "boolean"
+            ? isPublic
+            : (typeof isPrivate === "boolean" ? !isPrivate : !!channel.isPublic);
+        const savedIsPublic = channel.isDefault ? true : nextIsPublic;
+
+        if (!channelName) {
+            socket.emit("channelError", { message: "Channel name is required." });
+            return;
+        }
+
+        try {
+            const updated = await Channel.findOneAndUpdate(
+                { channelId: channel.id, isActive: true },
+                {
+                    $set: {
+                        name: channelName,
+                        description: channelDescription,
+                        isPublic: savedIsPublic
+                    }
+                },
+                { returnDocument: "after" }
+            );
+
+            if (!updated) {
+                socket.emit("channelError", { message: "That channel is no longer available." });
+                return;
+            }
+
+            const nextChannel = {
+                ...normalizeChannelDoc(updated),
+                memberCount: Number(channel.memberCount) || 0
+            };
+            channels[channel.id] = nextChannel;
+
+            io.sockets.sockets.forEach((viewerSocket) => {
+                if (viewerSocket.data.channelId === channel.id) {
+                    viewerSocket.emit("channelChanged", {
+                        channel: publicChannel(nextChannel, viewerSocket)
+                    });
+                }
+            });
+
+            socket.emit("channelError", { message: "Channel settings saved.", ok: true });
+            broadcastChannelList();
+            broadcastRoomList();
+        } catch (e) {
+            console.error("updateChannel error:", e.message);
+            socket.emit("channelError", { message: "Unable to update channel settings right now." });
+        }
     });
 
     socket.on("toggleFavoriteChannel", async ({ channelId } = {}) => {
@@ -1842,7 +2321,314 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("createRoom", async ({ name, description, mode, channelId } = {}) => {
+    socket.on("channelModerationAction", async ({ targetId, action, duration } = {}) => {
+        if (!players[socket.id] || !socket.data.userId) return;
+        const target = typeof targetId === "string" ? players[targetId] : null;
+        if (!target || target.isBot || targetId === socket.id) {
+            socket.emit("channelError", { message: "That player cannot be moderated." });
+            return;
+        }
+
+        const roomId = target.roomId || DEFAULT_ROOM_ID;
+        const room = rooms[roomId];
+        const channel = channels[room?.channelId || DEFAULT_CHANNEL_ID];
+        if (!channel || channel.isDefault) {
+            socket.emit("channelError", { message: "Channel moderation is only available in user-created channels." });
+            return;
+        }
+        if (!canManageChannel(socket, channel)) {
+            socket.emit("channelError", { message: "Only channel admins can do that." });
+            return;
+        }
+        if (players[socket.id]?.roomId !== roomId) {
+            socket.emit("channelError", { message: "That player is no longer in your room." });
+            return;
+        }
+
+        const targetMembershipDoc = await ChannelMember.findOne({
+            channelId: channel.id,
+            userId: target.userId
+        });
+        if (!targetMembershipDoc) {
+            socket.emit("channelError", { message: "That player is not a channel member." });
+            return;
+        }
+        const targetMembership = normalizeMembershipDoc(targetMembershipDoc);
+        if (!canModerateChannelMember(socket, channel, targetMembership)) {
+            socket.emit("channelError", { message: "You cannot moderate that channel member." });
+            return;
+        }
+
+        try {
+            if (action === "kick") {
+                if (channel.isPublic) {
+                    socket.emit("channelError", { message: "Kick is only available for private channels. Use ban for public channels." });
+                    return;
+                }
+
+                await ChannelMember.deleteOne({ _id: targetMembershipDoc._id });
+                await removeFavoriteChannelForUser(target.userId, channel.id);
+                await refreshChannelMemberCount(channel.id);
+                await moveUserOutOfChannel(
+                    target.userId,
+                    channel,
+                    `You were kicked from ${channel.name}.`
+                );
+
+                io.to(roomChannel(DEFAULT_ROOM_ID)).emit("chatMessage", {
+                    name: "System",
+                    message: `${target.name} was kicked from ${channel.name}`
+                });
+            } else if (action === "ban") {
+                const minutes = normalizeChannelBanDuration(duration);
+                const banExpiresAt = minutes ? new Date(Date.now() + minutes * 60 * 1000) : null;
+                const updated = await ChannelMember.findOneAndUpdate(
+                    { _id: targetMembershipDoc._id },
+                    {
+                        $set: {
+                            status: "banned",
+                            banExpiresAt,
+                            bannedAt: new Date(),
+                            bannedByUserId: socket.data.userId,
+                            bannedByUsername: players[socket.id].name
+                        }
+                    },
+                    { returnDocument: "after" }
+                );
+                const bannedMembership = normalizeMembershipDoc(updated);
+
+                await removeFavoriteChannelForUser(target.userId, channel.id);
+                await refreshChannelMemberCount(channel.id);
+                await moveUserOutOfChannel(
+                    target.userId,
+                    channel,
+                    banExpiresAt
+                        ? `You were banned from ${channel.name} until ${banExpiresAt.toLocaleString()}.`
+                        : `You were permanently banned from ${channel.name}.`,
+                    { membership: bannedMembership }
+                );
+
+                const durationLabel = minutes ? ` for ${minutes} minute${minutes === 1 ? "" : "s"}` : " permanently";
+                io.to(roomChannel(DEFAULT_ROOM_ID)).emit("chatMessage", {
+                    name: "System",
+                    message: `${target.name} was banned from ${channel.name}${durationLabel}`
+                });
+            } else {
+                socket.emit("channelError", { message: "Unknown channel moderation action." });
+                return;
+            }
+
+            socket.emit("channelList", publicChannelsForSocket(socket));
+            broadcastRoomList();
+            broadcastChannelList();
+            await sendChannelBanList(socket, channel);
+        } catch (e) {
+            console.error("channelModerationAction error:", e.message);
+            socket.emit("channelError", { message: "Unable to update channel moderation right now." });
+        }
+    });
+
+    socket.on("getChannelBanList", async ({ channelId } = {}) => {
+        if (!players[socket.id]) return;
+        const channel = typeof channelId === "string" ? channels[channelId] : null;
+        if (!channel || !canManageChannel(socket, channel)) {
+            socket.emit("channelError", { message: "Only channel admins can view the ban list." });
+            return;
+        }
+
+        try {
+            await sendChannelBanList(socket, channel);
+        } catch (e) {
+            console.error("getChannelBanList error:", e.message);
+            socket.emit("channelError", { message: "Unable to load bans right now." });
+        }
+    });
+
+    socket.on("unbanChannelMember", async ({ channelId, userId } = {}) => {
+        if (!players[socket.id]) return;
+        const channel = typeof channelId === "string" ? channels[channelId] : null;
+        if (!channel || !canManageChannel(socket, channel)) {
+            socket.emit("channelError", { message: "Only channel admins can unban members." });
+            return;
+        }
+
+        try {
+            const membershipDoc = await ChannelMember.findOne({ channelId: channel.id, userId });
+            if (!membershipDoc || membershipDoc.status !== "banned") {
+                socket.emit("channelError", { message: "That ban is no longer active." });
+                await sendChannelBanList(socket, channel);
+                return;
+            }
+
+            const membership = normalizeMembershipDoc(membershipDoc);
+            if (!canModerateChannelMember(socket, channel, membership)) {
+                socket.emit("channelError", { message: "You cannot unban that member." });
+                return;
+            }
+
+            await ChannelMember.updateOne(
+                { _id: membershipDoc._id },
+                {
+                    $set: {
+                        status: "active",
+                        banExpiresAt: null,
+                        bannedAt: null,
+                        bannedByUserId: null,
+                        bannedByUsername: ""
+                    }
+                }
+            );
+            await refreshChannelMemberCount(channel.id);
+
+            const targetSocket = findOnlineSocketByUserId(userId);
+            if (targetSocket) {
+                targetSocket.data.channelMemberships ||= {};
+                targetSocket.data.channelMemberships[channel.id] = {
+                    ...membership,
+                    status: "active",
+                    banExpiresAt: null,
+                    bannedAt: null,
+                    bannedByUserId: null,
+                    bannedByUsername: ""
+                };
+                targetSocket.emit("channelList", publicChannelsForSocket(targetSocket));
+                targetSocket.emit("channelModerationNotice", {
+                    channelId: channel.id,
+                    message: `You were unbanned from ${channel.name}.`
+                });
+            }
+
+            socket.emit("channelError", { message: `${membership.username} was unbanned from ${channel.name}.` });
+            await sendChannelBanList(socket, channel);
+            broadcastChannelList();
+        } catch (e) {
+            console.error("unbanChannelMember error:", e.message);
+            socket.emit("channelError", { message: "Unable to unban that member right now." });
+        }
+    });
+
+    socket.on("updateRoomModeConfig", async ({ roomId, mode, modeConfig } = {}) => {
+        if (!players[socket.id]) return;
+        const room = typeof roomId === "string" ? rooms[roomId] : null;
+        if (!room) {
+            socket.emit("roomError", { message: "That room is no longer available." });
+            return;
+        }
+        if (!canCustomizeRoom(socket, room)) {
+            socket.emit("roomError", { message: "Only channel admins can customize this room." });
+            return;
+        }
+
+        const nextMode = sanitizeRoomMode(mode);
+        const nextConfig = sanitizeRoomModeConfig(nextMode, modeConfig);
+
+        try {
+            await Room.updateOne(
+                { roomId: room.id },
+                { $set: { mode: nextMode, modeConfig: nextConfig } }
+            );
+
+            rooms[room.id] = {
+                ...room,
+                mode: nextMode,
+                modeConfig: nextConfig
+            };
+
+            io.sockets.sockets.forEach((roomSocket) => {
+                if (players[roomSocket.id]?.roomId !== room.id) return;
+                roomSocket.emit("roomChanged", {
+                    room: publicRoom(rooms[room.id], roomSocket)
+                });
+                roomSocket.emit("roomRuntime", {
+                    roomId: room.id,
+                    mode: nextMode,
+                    modeConfig: nextConfig
+                });
+            });
+            io.to(roomChannel(room.id)).emit("chatMessage", {
+                name: "System",
+                message: `${players[socket.id]?.name || "A channel admin"} updated the room mode`
+            });
+            broadcastRoomList();
+            broadcastChannelList();
+        } catch (e) {
+            console.error("updateRoomModeConfig error:", e.message);
+            socket.emit("roomError", { message: "Unable to update room customization right now." });
+        }
+    });
+
+    socket.on("updateRoom", async ({ roomId, name, description, mode, modeConfig } = {}) => {
+        if (!players[socket.id]) return;
+        const room = typeof roomId === "string" ? rooms[roomId] : null;
+        if (!room) {
+            socket.emit("roomError", { message: "That room is no longer available." });
+            return;
+        }
+        if (!canCustomizeRoom(socket, room)) {
+            socket.emit("roomError", { message: "Only channel admins can edit this room." });
+            return;
+        }
+
+        const roomName = sanitizeRoomName(name);
+        const roomDescription = sanitizeRoomDescription(description);
+        const nextMode = sanitizeRoomMode(mode || room.mode);
+        const nextConfig = sanitizeRoomModeConfig(
+            nextMode,
+            modeConfig && typeof modeConfig === "object" ? modeConfig : room.modeConfig
+        );
+
+        if (!roomName) {
+            socket.emit("roomError", { message: "Room name is required." });
+            return;
+        }
+
+        try {
+            const updated = await Room.findOneAndUpdate(
+                { roomId: room.id, isActive: true },
+                {
+                    $set: {
+                        name: roomName,
+                        description: roomDescription,
+                        mode: nextMode,
+                        modeConfig: nextConfig
+                    }
+                },
+                { returnDocument: "after" }
+            );
+
+            if (!updated) {
+                socket.emit("roomError", { message: "That room is no longer available." });
+                return;
+            }
+
+            rooms[room.id] = normalizeRoomDoc(updated);
+
+            io.sockets.sockets.forEach((roomSocket) => {
+                if (players[roomSocket.id]?.roomId !== room.id) return;
+                roomSocket.emit("roomChanged", {
+                    room: publicRoom(rooms[room.id], roomSocket)
+                });
+                roomSocket.emit("roomRuntime", {
+                    roomId: room.id,
+                    mode: nextMode,
+                    modeConfig: nextConfig
+                });
+            });
+            io.to(roomChannel(room.id)).emit("chatMessage", {
+                name: "System",
+                message: `${players[socket.id]?.name || "A channel admin"} updated ${roomName}`
+            });
+
+            socket.emit("roomError", { message: "Room settings saved.", ok: true });
+            broadcastRoomList();
+            broadcastChannelList();
+        } catch (e) {
+            console.error("updateRoom error:", e.message);
+            socket.emit("roomError", { message: "Unable to update room settings right now." });
+        }
+    });
+
+    socket.on("createRoom", async ({ name, description, mode, modeConfig, channelId } = {}) => {
         if (!players[socket.id]) return;
 
         const roomName = sanitizeRoomName(name);
@@ -1871,6 +2657,7 @@ io.on("connection", (socket) => {
                 name: roomName,
                 description: roomDescription,
                 mode: roomMode,
+                modeConfig: sanitizeRoomModeConfig(roomMode, modeConfig),
                 channelId: channel.id,
                 ownerUserId: socket.data.userId,
                 ownerName: players[socket.id].name
