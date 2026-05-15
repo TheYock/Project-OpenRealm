@@ -49,6 +49,7 @@ const ChannelMember = require("./models/ChannelMember");
 const Room       = require("./models/Room");
 const Friendship = require("./models/Friendship");
 const DirectMessage = require("./models/DirectMessage");
+const RoomMessage   = require("./models/RoomMessage");
 
 // --- Database Connection ---
 // Connect to MongoDB Atlas using the URI stored in .env.
@@ -1700,6 +1701,24 @@ function sendRoomState(socket, roomId) {
     });
     socket.emit("roomList", publicRoomsForSocket(socket, channel.id));
     socket.emit("currentPlayers", publicPlayersSnapshot(room.id));
+
+    // Send the last 50 messages for this room so the joining player can see
+    // recent chat history. Sorted ascending so they render in time order.
+    RoomMessage.find({ roomId: room.id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean()
+        .then(msgs => {
+            if (msgs.length) {
+                socket.emit("chatHistory", msgs.reverse().map(m => ({
+                    name:      m.name,
+                    message:   m.message,
+                    timestamp: m.createdAt.getTime()
+                })));
+            }
+        })
+        .catch(err => console.error("chatHistory fetch error:", err.message));
+
     return true;
 }
 
@@ -2972,7 +2991,7 @@ io.on("connection", (socket) => {
     socket.on("playerMove", (data) => {
         // Guard: make sure this socket has a registered player and is not frozen.
         // Rate limit: max 20 position updates per second.
-        if (isRateLimited(socket, "move", 20, 1000)) return;
+        if (isRateLimited(socket, "move", 30, 1000)) return;
         if (players[socket.id] && !players[socket.id].frozen) {
             // Clamp the incoming coordinates to valid world bounds,
             // just like we did in "join" — clients could send anything.
@@ -2993,6 +3012,27 @@ io.on("connection", (socket) => {
                 y
             });
         }
+    });
+
+    // --- Event: "playerTarget" ---
+    // Fired when a human player clicks a destination on the canvas.
+    // We relay the target to all other clients in the room so they can
+    // simulate the player's movement locally, giving smooth animation
+    // without depending on the rate-limited position-update stream.
+    socket.on("playerTarget", (data) => {
+        if (!players[socket.id] || players[socket.id].frozen) return;
+        const p  = players[socket.id];
+        const tx = Math.max(0, Math.min(Number(data.x)    || 0, WORLD_WIDTH));
+        const ty = Math.max(0, Math.min(Number(data.y)    || 0, WORLD_HEIGHT));
+        const fx = Math.max(0, Math.min(Number(data.fromX) || 0, WORLD_WIDTH));
+        const fy = Math.max(0, Math.min(Number(data.fromY) || 0, WORLD_HEIGHT));
+        socket.to(roomChannel(p.roomId || DEFAULT_ROOM_ID)).emit("playerTarget", {
+            id:    socket.id,
+            fromX: fx,
+            fromY: fy,
+            x:     tx,
+            y:     ty
+        });
     });
 
     // --- Event: "chatMessage" ---
@@ -3024,12 +3064,21 @@ io.on("connection", (socket) => {
 
         // Broadcast the message to all clients (including the sender so
         // their own chat log and bubble update correctly).
+        const room = rooms[roomId];
         io.to(roomChannel(roomId)).emit("chatMessage", {
             id: socket.id,
             name,
             message,
             timestamp: Date.now()
         });
+
+        // Persist to MongoDB for room history (fire-and-forget).
+        RoomMessage.create({
+            roomId,
+            channelId: room?.channelId || "",
+            name,
+            message
+        }).catch(err => console.error("RoomMessage save error:", err.message));
 
         // --- Bot @mention replies ---
         // If the message contains @BotName matching a live bot, the bot
@@ -3196,6 +3245,29 @@ io.on("connection", (socket) => {
         io.to(roomChannel(players[socket.id].roomId || DEFAULT_ROOM_ID)).emit("playerAvatarUpdate", { id: socket.id, avatar: { color } });
     });
 
+    // --- Event: "renamePlayer" ---
+    // Sent after a successful /api/account/username call.
+    // The client passes the new JWT; we verify it so the new name is
+    // authoritative rather than trusting a client-supplied string.
+    socket.on("renamePlayer", async ({ token } = {}) => {
+        if (!players[socket.id] || !token) return;
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch {
+            return;
+        }
+        const newName = decoded.username;
+        if (!newName || typeof newName !== "string") return;
+
+        const oldName = players[socket.id].name;
+        if (oldName === newName) return;
+
+        players[socket.id].name = newName;
+        const roomId = players[socket.id].roomId || DEFAULT_ROOM_ID;
+        io.to(roomChannel(roomId)).emit("playerRenamed", { id: socket.id, oldName, newName });
+    });
+
     // --- Event: "getProfile" ---
     // Any logged-in player can request the public profile of another player.
     // We respond only to the requester (socket.emit, not io.emit) with:
@@ -3218,11 +3290,14 @@ io.on("connection", (socket) => {
             createdAt: null
         };
 
-        // For real players, look up their registration date from MongoDB.
+        // For real players, look up their registration date and alias history from MongoDB.
         if (!target.isBot) {
             try {
-                const user = await User.findOne({ username: target.name }, "createdAt");
-                if (user) profile.createdAt = user.createdAt;
+                const user = await User.findOne({ username: target.name }, "createdAt aliases");
+                if (user) {
+                    profile.createdAt = user.createdAt;
+                    profile.aliases   = user.aliases || [];
+                }
             } catch (e) {
                 console.error("getProfile DB error:", e.message);
             }

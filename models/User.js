@@ -52,6 +52,11 @@ const userSchema = new mongoose.Schema({
         default: null
     },
 
+    aliases: {
+        type: [String],
+        default: []
+    },
+
     passwordResetTokenHash: {
         type: String,
         default: null

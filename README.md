@@ -1,6 +1,6 @@
 # OpenRealm
 
-Version: `0.2.5`
+Version: `0.2.7`
 
 OpenRealm is a browser-based multiplayer social game where players can log in, enter live rooms, chat, customize their avatar color, and move around a shared 2D canvas world.
 
@@ -183,14 +183,31 @@ models/Friendship.js        Friend requests and accepted friend relationships
 models/DirectMessage.js     Private one-to-one chat messages
 models/InviteCode.js        Invite codes for registration gating
 models/ContactSubmission.js Bug reports, feedback, and invite requests from the contact form
+models/RoomMessage.js       Room chat messages with a 7-day TTL index
 routes/auth.js              Register/login/contact API routes
 services/email.js           Resend email delivery for verification and contact notifications
 makeAdmin.js                Grants admin and creation privileges
 setRoomCreator.js           Grants/revokes creation privileges only
 makeInvite.js               Generates and lists invite codes
 ```
+## Version 0.2.7 Notes
+
+- Rewrote remote player movement to use target-sharing instead of position streaming.
+- Clients now receive a `playerTarget` event on each click and simulate movement locally, eliminating interpolation lag entirely.
+- Made all player movement time-based (`PLAYER_SPEED_PPS`) so speed is frame-rate independent and identical between local and remote views.
+- Tab visibility resync — when a tab regains focus after `requestAnimationFrame` was paused, all remote players snap to their last server-reported position before the simulation resumes.
+
 ## Version 0.2.6 Notes
-- Added reset password logic
+
+- Added forgot password flow with secure token email delivery via Resend.
+- Added password reset page served from the server with a one-hour expiry window.
+- Added notification badges — red number pills on the Friends and DMs top-bar buttons showing pending request and unread message counts.
+- Added username change from the player bar — click your name to open a rename dialog; old usernames are stored as aliases.
+- Added previous alias history (last 5 usernames) to the View Profile panel.
+- Added friend search by username — send a friend request from the Friends drawer without the target needing to be online or in the same room.
+- Accepted friends are highlighted with a green outline on the canvas.
+- Right-click menu shows "Friends ✓" (greyed, non-actionable) instead of "Add Friend" for already-accepted friends.
+- Room chat is now saved to MongoDB with a 7-day TTL index and replayed to players on room join (last 50 messages).
 
 ## Version 0.2.5 Notes
 

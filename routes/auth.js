@@ -365,6 +365,56 @@ router.post("/account/email", async (req, res) => {
 });
 
 // ============================================================
+// POST /api/account/username
+// ============================================================
+// Authenticated users can change their display name.
+router.post("/account/username", async (req, res) => {
+    try {
+        const newUsername = typeof req.body.username === "string" ? req.body.username.trim() : "";
+
+        if (newUsername.length < 2) {
+            return res.status(400).json({ error: "Username must be at least 2 characters." });
+        }
+        if (newUsername.length > 20) {
+            return res.status(400).json({ error: "Username can be at most 20 characters." });
+        }
+        if (!/^[a-zA-Z0-9_\- .]+$/.test(newUsername)) {
+            return res.status(400).json({ error: "Username can only contain letters, numbers, spaces, hyphens, underscores, and periods." });
+        }
+
+        const user = await userFromAuthHeader(req);
+
+        if (user.username.toLowerCase() === newUsername.toLowerCase()) {
+            return res.status(400).json({ error: "That is already your username." });
+        }
+
+        const existing = await User.findOne({
+            username: new RegExp(`^${escapeRegex(newUsername)}$`, "i"),
+            _id: { $ne: user._id }
+        });
+        if (existing) {
+            return res.status(400).json({ error: "Username already taken." });
+        }
+
+        // Record the old name in the alias history (newest first, capped at 5).
+        const oldName = user.username;
+        if (!user.aliases.includes(oldName)) {
+            user.aliases = [oldName, ...user.aliases].slice(0, 5);
+        }
+        user.username = newUsername;
+        await user.save();
+
+        res.json({ token: signUserToken(user), user: publicUser(user) });
+    } catch (err) {
+        if (err.statusCode) {
+            return res.status(err.statusCode).json({ error: err.message });
+        }
+        console.error("Update username error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// ============================================================
 // POST /api/resend-verification
 // ============================================================
 // Reissues a verification link for the authenticated user's current email.

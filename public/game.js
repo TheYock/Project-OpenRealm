@@ -126,6 +126,67 @@ document.querySelectorAll(".channelSection h3").forEach(h3 => {
     }
 }());
 
+// --- Username Change Modal ---
+(function () {
+    const overlay    = document.getElementById("usernameOverlay");
+    const closeBtn   = document.getElementById("usernameCloseBtn");
+    const form       = document.getElementById("formChangeUsername");
+    const input      = document.getElementById("newUsernameInput");
+    const errorEl    = document.getElementById("usernameChangeError");
+    const submitBtn  = document.getElementById("usernameSubmitBtn");
+    const currentLbl = document.getElementById("currentUsernameDisplay");
+    const nameEl     = document.getElementById("playerBarName");
+
+    function openModal() {
+        if (!playerName) return;
+        if (currentLbl) currentLbl.textContent = playerName;
+        input.value           = "";
+        errorEl.textContent   = "";
+        submitBtn.disabled    = false;
+        submitBtn.textContent = "Save";
+        overlay.style.display = "flex";
+        input.focus();
+    }
+
+    function closeModal() {
+        overlay.style.display = "none";
+    }
+
+    if (nameEl) nameEl.addEventListener("click", openModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorEl.textContent   = "";
+        submitBtn.disabled    = true;
+        submitBtn.textContent = "Saving...";
+
+        const token = localStorage.getItem("or_token");
+        try {
+            const res  = await fetch("/api/account/username", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ username: input.value.trim() })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                localStorage.setItem("or_token",    data.token);
+                localStorage.setItem("or_username", data.user.username);
+                socket.emit("renamePlayer", { token: data.token });
+                closeModal();
+            } else {
+                errorEl.textContent   = data.error || "Something went wrong.";
+                submitBtn.disabled    = false;
+                submitBtn.textContent = "Save";
+            }
+        } catch {
+            errorEl.textContent   = "Network error. Please try again.";
+            submitBtn.disabled    = false;
+            submitBtn.textContent = "Save";
+        }
+    });
+}());
 
 const chatInput = document.getElementById("chatInput");
 const sendButton = document.getElementById("sendButton");
@@ -176,6 +237,8 @@ const roomBarChannelSettingsButton = document.getElementById("roomBarChannelSett
 const roomBarRoomSettingsButton = document.getElementById("roomBarRoomSettingsButton");
 const friendsButton = document.getElementById("friendsButton");
 const messagesButton = document.getElementById("messagesButton");
+const friendsBadge  = document.getElementById("friendsBadge");
+const dmsBadge      = document.getElementById("dmsBadge");
 const socialDrawer = document.getElementById("socialDrawer");
 const socialDrawerTitle = document.getElementById("socialDrawerTitle");
 const socialCloseButton = document.getElementById("socialCloseButton");
@@ -396,9 +459,15 @@ function updateSocialButtons() {
     channelBrowserButton.disabled = !loggedIn;
     friendsButton.disabled = !loggedIn;
     messagesButton.disabled = !loggedIn;
-    const unread = unreadTotal();
-    messagesButton.textContent = unread ? `DMs (${unread})` : "DMs";
-    messagesButton.classList.toggle("hasUnread", unread > 0);
+
+    const unread  = unreadTotal();
+    const pending = friends.filter(f => f.status === "pending" && f.direction === "incoming").length;
+
+    if (dmsBadge)     dmsBadge.textContent     = unread  || "";
+    if (friendsBadge) friendsBadge.textContent  = pending || "";
+
+    messagesButton.classList.toggle("hasUnread", unread  > 0);
+    friendsButton.classList.toggle("hasUnread",  pending > 0);
 }
 
 function setSocialTab(tab) {
@@ -1650,6 +1719,22 @@ messagesTabButton.addEventListener("click", () => {
     renderSocialDrawer();
 });
 
+document.getElementById("friendSearchForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("friendSearchInput");
+    const btn   = document.getElementById("friendSearchBtn");
+    const username = input.value.trim();
+    if (!username) return;
+
+    btn.disabled = true;
+    socket.emit("sendFriendRequest", { username });
+
+    input.value  = "";
+    // Re-enable after a short delay so the user can't spam the button,
+    // and the server response (friendNotice / friendError) will display feedback.
+    setTimeout(() => { btn.disabled = false; }, 1500);
+});
+
 dmForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!activeDmFriendId) return;
@@ -1924,6 +2009,10 @@ canvas.addEventListener("click", (e) => {
         y: point.y - player.size / 2
     };
 
+    // Share our current position AND the target so other clients can start
+    // the simulation from exactly the right spot, avoiding any mismatch.
+    socket.emit("playerTarget", { fromX: player.x, fromY: player.y, x: moveTarget.x, y: moveTarget.y });
+
     // Spawn a ripple at the exact click point.
     clickRipples.push({ x: point.x, y: point.y, startTime: performance.now() });
 });
@@ -2078,15 +2167,16 @@ canvas.addEventListener("contextmenu", (e) => {
         hitPlayer ? "block" : "none";
 
     const friendState = p ? friendByUsername(p.name) : null;
-    const canMessage = hitPlayer && friendState?.status === "accepted";
+    const isAcceptedFriend = hitPlayer && friendState?.status === "accepted";
+    const canMessage = hitPlayer && isAcceptedFriend;
     const isPendingFriend = hitPlayer && friendState?.status === "pending";
-    const canAddFriend = hitPlayer && (!friendState || friendState.status !== "accepted");
 
     document.getElementById("ctxCanvasMessage").style.display = canMessage ? "block" : "none";
     const addFriendButton = document.getElementById("ctxCanvasAddFriend");
-    addFriendButton.style.display = canAddFriend ? "block" : "none";
-    addFriendButton.disabled = isPendingFriend;
-    addFriendButton.textContent = isPendingFriend ? "Friend Pending" : "Add Friend";
+    addFriendButton.style.display = hitPlayer ? "block" : "none";
+    addFriendButton.disabled = isAcceptedFriend || isPendingFriend;
+    addFriendButton.textContent = isAcceptedFriend ? "Friends ✓" : (isPendingFriend ? "Friend Pending" : "Add Friend");
+    addFriendButton.classList.toggle("isFriend", isAcceptedFriend);
 
     // Show the "Admin" label and divider only when there are admin options
     // AND there is also a general option (View Profile) below the line.
@@ -2220,6 +2310,19 @@ socket.on("profileData", (profile) => {
         sessionEl.textContent = `Online this session: ${minutes}m ${seconds}s`;
     } else {
         sessionEl.textContent = "";
+    }
+
+    // Previous aliases
+    const aliasSection = document.getElementById("profileAliases");
+    const aliasList    = document.getElementById("profileAliasList");
+    if (aliasSection && aliasList) {
+        const aliases = Array.isArray(profile.aliases) ? profile.aliases.filter(Boolean) : [];
+        if (aliases.length) {
+            aliasList.textContent  = aliases.join(", ");
+            aliasSection.style.display = "block";
+        } else {
+            aliasSection.style.display = "none";
+        }
     }
 
     document.getElementById("profileOverlay").style.display = "flex";
@@ -2541,8 +2644,15 @@ socket.on("currentPlayers", (serverPlayers) => {
     // Clear our local dictionary first to avoid stale entries.
     Object.keys(players).forEach((id) => delete players[id]);
 
-    // Copy all players from the server snapshot into our local dictionary.
-    Object.assign(players, serverPlayers);
+    // Copy all players from the server snapshot.
+    // Bots get a posBuffer for interpolation; humans get moveTarget for local simulation.
+    Object.entries(serverPlayers).forEach(([id, p]) => {
+        players[id] = {
+            ...p,
+            moveTarget: null,
+            posBuffer: p.isBot ? [{ t: performance.now() - INTERP_DELAY_MS, x: p.x, y: p.y }] : []
+        };
+    });
 
     // Sync the avatar color button to whatever color was loaded from the DB.
     if (myId && players[myId]?.avatar?.color) {
@@ -2564,6 +2674,8 @@ socket.on("currentPlayers", (serverPlayers) => {
 socket.on("newPlayer", (playerData) => {
     players[playerData.id] = {
         ...playerData,
+        moveTarget:    null,
+        posBuffer:     playerData.isBot ? [{ t: performance.now() - INTERP_DELAY_MS, x: playerData.x, y: playerData.y }] : [],
         chatBubble:    "",
         chatTimestamp: 0,
         isBot:         playerData.isBot || false
@@ -2577,10 +2689,39 @@ socket.on("newPlayer", (playerData) => {
 // Note: the server uses broadcast.emit for this, so we never
 // receive our own movement back — we handle that locally instead.
 socket.on("playerMoved", (playerData) => {
-    if (players[playerData.id]) {
-        players[playerData.id].x = playerData.x;
-        players[playerData.id].y = playerData.y;
+    const p = players[playerData.id];
+    if (!p) return;
+
+    if (p.isBot) {
+        // Bots are driven by the server — use posBuffer interpolation.
+        if (!p.posBuffer) p.posBuffer = [];
+        const now        = performance.now();
+        const renderTime = now - INTERP_DELAY_MS;
+        const buf        = p.posBuffer;
+        if (buf.length > 0 && buf[buf.length - 1].t < renderTime) {
+            buf.push({ t: renderTime, x: p.x, y: p.y });
+        }
+        buf.push({ t: now, x: playerData.x, y: playerData.y });
+        while (buf.length > 30) buf.shift();
+    } else {
+        // Store the server position silently. Not applied during active play
+        // (to avoid stale-packet jumps), but used to resync when the tab
+        // regains focus after rAF was paused by the browser.
+        p.serverX = playerData.x;
+        p.serverY = playerData.y;
     }
+});
+
+// --- Event: "playerTarget" ---
+// Sent when another human player clicks a destination.
+// We set their moveTarget so we can simulate their movement locally,
+// giving perfectly smooth animation without waiting for position packets.
+socket.on("playerTarget", ({ id, fromX, fromY, x, y }) => {
+    const p = players[id];
+    if (!p || p.isBot) return;
+    // Update the target. Both clients use the same time-based speed so the
+    // simulation stays in sync naturally — no position snap needed.
+    p.moveTarget = { x, y };
 });
 
 // --- Event: "playerDisconnected" ---
@@ -2598,6 +2739,18 @@ socket.on("playerAvatarUpdate", ({ id, avatar }) => {
     if (players[id]) players[id].avatar = avatar;
     // If it's our own update, keep the button preview in sync too.
     if (id === myId) syncAvatarButton(avatar.color);
+});
+
+// --- Event: "playerRenamed" ---
+// Sent after a successful username change.
+socket.on("playerRenamed", ({ id, newName }) => {
+    if (players[id]) players[id].name = newName;
+    if (id === myId) {
+        playerName = newName;
+        document.getElementById("playerBarName").textContent = newName;
+        document.getElementById("currentUsernameDisplay").textContent = newName;
+    }
+    updatePlayerList();
 });
 
 // --- Event: "spectatorCount" ---
@@ -2629,6 +2782,18 @@ socket.on("forcedDisconnect", (reason) => {
     localStorage.removeItem("or_username");
     alert(reason);
     location.reload();
+});
+
+// --- Event: "chatHistory" ---
+// Sent once when joining a room — the last 50 messages from MongoDB.
+socket.on("chatHistory", (messages) => {
+    if (!messages.length) return;
+    const sep = document.createElement("div");
+    sep.className = "chatSeparator";
+    sep.textContent = "— previous messages —";
+    chatMessages.appendChild(sep);
+    messages.forEach(m => addChatMessage(m.name, m.message));
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
 // --- Event: "chatMessage" ---
@@ -2804,17 +2969,18 @@ document.getElementById("playerList").addEventListener("contextmenu", (e) => {
     const canModerate = canModerateCurrentChannel();
     const canChannelModerateTarget = isRealPlayer && canManageCurrentChannel();
     const friendState = isRealPlayer ? friendByUsername(p.name) : null;
-    const canMessage = isRealPlayer && friendState?.status === "accepted";
+    const isAcceptedFriend = isRealPlayer && friendState?.status === "accepted";
+    const canMessage = isRealPlayer && isAcceptedFriend;
     const isPendingFriend = isRealPlayer && friendState?.status === "pending";
-    const canAddFriend = isRealPlayer && (!friendState || friendState.status !== "accepted");
 
     document.getElementById("ctxListMessage").style.display = canMessage ? "block" : "none";
     const addFriendButton = document.getElementById("ctxListAddFriend");
-    addFriendButton.style.display = canAddFriend ? "block" : "none";
-    addFriendButton.disabled = isPendingFriend;
-    addFriendButton.textContent = isPendingFriend ? "Friend Pending" : "Add Friend";
+    addFriendButton.style.display = isRealPlayer ? "block" : "none";
+    addFriendButton.disabled = isAcceptedFriend || isPendingFriend;
+    addFriendButton.textContent = isAcceptedFriend ? "Friends ✓" : (isPendingFriend ? "Friend Pending" : "Add Friend");
+    addFriendButton.classList.toggle("isFriend", isAcceptedFriend);
     document.getElementById("ctxListSocialDivider").style.display =
-        (canMessage || canAddFriend) && (canModerate || canChannelModerateTarget) ? "block" : "none";
+        (canMessage || isRealPlayer) && (canModerate || canChannelModerateTarget) ? "block" : "none";
     document.getElementById("ctxListAdminLabel").style.display =
         (canModerate || canChannelModerateTarget) ? "block" : "none";
     document.getElementById("ctxMute").style.display           = canModerate ? "block" : "none";
@@ -2999,8 +3165,80 @@ chatInput.addEventListener("keydown", (e) => {
 // Game Logic
 // ============================================================
 
+// Buffer interpolation constants — used only for bots, whose movement is
+// driven by server-emitted positions rather than local simulation.
+const INTERP_DELAY_MS = 150;
+const MAX_EXTRAP_MS   = 200;
+
+// Shared movement speed in pixels per second, used by both local and remote
+// player simulation. Time-based so it is frame-rate independent.
+const PLAYER_SPEED_PPS = 60;
+
+function updateRemotePlayers(deltaMs) {
+    const step       = (PLAYER_SPEED_PPS * deltaMs) / 1000;
+    const renderTime = performance.now() - INTERP_DELAY_MS; // bots only
+
+    for (const [id, p] of Object.entries(players)) {
+        if (id === myId) continue;
+
+        if (p.isBot) {
+            // === Bots: interpolate from server position stream ===
+            const buf = p.posBuffer;
+            if (!buf || buf.length === 0) continue;
+
+            let bi = -1;
+            for (let i = buf.length - 1; i >= 0; i--) {
+                if (buf[i].t <= renderTime) { bi = i; break; }
+            }
+
+            if (bi === -1) {
+                p.x = buf[0].x; p.y = buf[0].y;
+            } else if (bi === buf.length - 1) {
+                const last = buf[bi];
+                if (bi > 0) {
+                    const prev  = buf[bi - 1];
+                    const segMs = last.t - prev.t;
+                    if (segMs > 0) {
+                        const elapsed = Math.min(renderTime - last.t, MAX_EXTRAP_MS);
+                        p.x = last.x + (last.x - prev.x) / segMs * elapsed;
+                        p.y = last.y + (last.y - prev.y) / segMs * elapsed;
+                    } else {
+                        p.x = last.x; p.y = last.y;
+                    }
+                } else {
+                    p.x = last.x; p.y = last.y;
+                }
+            } else {
+                const a = buf[bi], b = buf[bi + 1];
+                const t = (renderTime - a.t) / (b.t - a.t);
+                p.x = a.x + (b.x - a.x) * t;
+                p.y = a.y + (b.y - a.y) * t;
+            }
+
+            while (buf.length > 2 && buf[1].t < renderTime) buf.shift();
+
+        } else {
+            // === Human players: simulate movement toward their click target ===
+            if (p.moveTarget) {
+                const dx   = p.moveTarget.x - p.x;
+                const dy   = p.moveTarget.y - p.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist <= step) {
+                    p.x = p.moveTarget.x;
+                    p.y = p.moveTarget.y;
+                    p.moveTarget = null;
+                } else {
+                    p.x += (dx / dist) * step;
+                    p.y += (dy / dist) * step;
+                }
+            }
+
+        }
+    }
+}
+
 // updatePlayer runs every frame and handles movement input.
-function updatePlayer() {
+function updatePlayer(deltaMs) {
     // Spectators haven't logged in yet — don't move anything.
     if (!playerName) return;
 
@@ -3013,37 +3251,31 @@ function updatePlayer() {
     }
 
     // --- Point-and-Click Movement ---
-    // If there's an active target, move the player toward it each frame.
-    if (moveTarget) {
-        const dx = moveTarget.x - player.x; // Horizontal distance to target
-        const dy = moveTarget.y - player.y; // Vertical distance to target
+    // Time-based step so speed is identical regardless of frame rate.
+    // Uses the same PLAYER_SPEED_PPS constant as the remote simulation,
+    // guaranteeing that both clients advance positions at the same rate.
+    const step = (PLAYER_SPEED_PPS * deltaMs) / 1000;
 
-        // Math.hypot() gives us the straight-line distance between the
-        // player and the target using the Pythagorean theorem (a²+b²=c²).
+    if (moveTarget) {
+        const dx       = moveTarget.x - player.x;
+        const dy       = moveTarget.y - player.y;
         const distance = Math.hypot(dx, dy);
 
-        if (distance <= player.speed) {
-            // Close enough — snap to the target and stop moving.
-            // Without this snap, the player would jitter back and forth
-            // around the target because it keeps overshooting by tiny amounts.
+        if (distance <= step) {
             player.x = moveTarget.x;
             player.y = moveTarget.y;
             moveTarget = null;
         } else {
-            // Normalize the direction vector (dx/distance, dy/distance) to get
-            // a unit vector — a vector of length 1 pointing toward the target.
-            // Multiplying by player.speed then gives a step of exactly that length,
-            // so the player always moves at a consistent speed regardless of angle.
-            player.x += (dx / distance) * player.speed;
-            player.y += (dy / distance) * player.speed;
+            player.x += (dx / distance) * step;
+            player.y += (dy / distance) * step;
         }
     }
 
     // --- WASD Movement (commented out — may restore later) ---
-    // if (keys["w"]) player.y -= player.speed;
-    // if (keys["s"]) player.y += player.speed;
-    // if (keys["a"]) player.x -= player.speed;
-    // if (keys["d"]) player.x += player.speed;
+    // if (keys["w"]) player.y -= step;
+    // if (keys["s"]) player.y += step;
+    // if (keys["a"]) player.x -= step;
+    // if (keys["d"]) player.x += step;
 
     // Clamp the player's position so they can't move off the canvas edges.
     // player.size is subtracted from the right/bottom edges so the whole
@@ -3311,6 +3543,13 @@ function draw() {
             ctx.strokeRect(p.x + 1, p.y + 1, size - 2, size - 2);
         }
 
+        // Accepted friends get a green outline outside the square.
+        if (id !== myId && !p.isBot && acceptedFriends().some(f => f.username === p.name)) {
+            ctx.strokeStyle = "#4caf50";
+            ctx.lineWidth   = 2;
+            ctx.strokeRect(p.x - 1, p.y - 1, size + 2, size + 2);
+        }
+
         // The local player gets a white outline drawn outside the square
         // so they can always find themselves on screen regardless of color.
         if (id === myId) {
@@ -3472,9 +3711,34 @@ function draw() {
 
 // gameLoop runs once per animation frame (typically 60 times per second).
 // It updates the game state and then redraws everything.
-function gameLoop() {
-    updatePlayer(); // Process input and sync position
-    draw();         // Redraw the canvas with updated state
+let lastFrameTime = performance.now();
+
+// When the tab regains focus, rAF resumes but the simulation hasn't advanced
+// since the browser paused it. Snap every human player to their last
+// server-reported position so there's no catch-up drift, then reset the
+// frame timer so the first delta isn't enormous.
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    lastFrameTime = performance.now();
+    for (const [id, p] of Object.entries(players)) {
+        if (id === myId || p.isBot) continue;
+        if (p.serverX !== undefined) {
+            p.x = p.serverX;
+            p.y = p.serverY;
+            delete p.serverX;
+            delete p.serverY;
+        }
+    }
+});
+
+function gameLoop(timestamp) {
+    const now     = timestamp ?? performance.now();
+    const deltaMs = Math.min(now - lastFrameTime, 50); // cap so a hidden tab doesn't cause a jump
+    lastFrameTime = now;
+
+    updateRemotePlayers(deltaMs); // Simulate / interpolate remote player positions
+    updatePlayer(deltaMs);        // Process input and sync local position
+    draw();                       // Redraw the canvas with updated state
 
     // requestAnimationFrame tells the browser to call gameLoop again
     // before the next screen repaint. This syncs our game to the display's

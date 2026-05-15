@@ -1523,6 +1523,27 @@
                 color: #aaa;
             }
 
+            #profileAliases {
+                margin-top: 14px;
+                padding-top: 12px;
+                border-top: 1px solid #2a2a2a;
+            }
+
+            .profileAliasLabel {
+                margin: 0 0 5px;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                color: #444;
+            }
+
+            #profileAliasList {
+                margin: 0;
+                font-size: 0.82rem;
+                color: #666;
+                font-style: italic;
+            }
+
             /* --- Help Button --- */
             #helpButton {
                 padding: 10px 12px;
@@ -1682,6 +1703,15 @@
                 background: rgba(255, 193, 7, 0.12);
                 border-left: 3px solid #ffc107;
                 padding-left: 4px;
+            }
+
+            .chatSeparator {
+                text-align: center;
+                color: #3a3a3a;
+                font-size: 0.72rem;
+                letter-spacing: 1px;
+                margin: 6px 0 10px;
+                user-select: none;
             }
 
             /* ============================================================
@@ -2212,6 +2242,19 @@
                 color: #ccc;
             }
 
+            #canvasContextMenu button.isFriend,
+            #contextMenu button.isFriend {
+                opacity: 1;
+                color: #4caf50;
+                cursor: default;
+            }
+
+            #canvasContextMenu button.isFriend:hover,
+            #contextMenu button.isFriend:hover {
+                background: none;
+                color: #4caf50;
+            }
+
             /* ============================================================
                Status Badges (player list)
                Shown next to a player's name when they are muted or frozen.
@@ -2267,7 +2310,64 @@
             #playerBar .player-name {
                 color: #4caf50;
                 font-weight: bold;
+                cursor: pointer;
+                border-bottom: 1px dashed transparent;
+                transition: border-color 0.15s;
             }
+
+            #playerBar .player-name:hover {
+                border-bottom-color: #4caf50;
+            }
+
+            #usernameOverlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.75);
+                z-index: 1200;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+            }
+
+            #usernameCard {
+                position: relative;
+                background: #1e1e1e;
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 32px 28px;
+                width: 320px;
+                max-width: 100%;
+                box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+            }
+
+            #usernameCard h2 {
+                margin: 0 0 4px;
+                font-size: 1.2rem;
+                color: #eee;
+            }
+
+            #usernameCard p.subtitle {
+                margin: 0 0 20px;
+                color: #555;
+                font-size: 0.8rem;
+            }
+
+            #usernameCloseBtn {
+                position: absolute;
+                top: 12px;
+                right: 14px;
+                background: none;
+                border: none;
+                color: #555;
+                font-size: 1.3rem;
+                cursor: pointer;
+                line-height: 1;
+                padding: 2px 6px;
+                transition: color 0.15s;
+            }
+
+            #usernameCloseBtn:hover { color: #aaa; }
 
             #emailVerificationBanner {
                 display: none;
@@ -2341,6 +2441,7 @@
             }
 
             .barButton {
+                position: relative;
                 padding: 6px 12px;
                 background: #242424;
                 border: 1px solid #444;
@@ -2360,6 +2461,29 @@
             .barButton.hasUnread {
                 border-color: #f2d17a;
                 color: #f2d17a;
+            }
+
+            .notifBadge {
+                display: none;
+                position: absolute;
+                top: -7px;
+                right: -7px;
+                min-width: 18px;
+                height: 18px;
+                padding: 0 5px;
+                background: #e53935;
+                color: #fff;
+                border-radius: 9px;
+                font-size: 0.65rem;
+                font-weight: bold;
+                line-height: 18px;
+                text-align: center;
+                pointer-events: none;
+                z-index: 1;
+            }
+
+            .notifBadge:not(:empty) {
+                display: block;
             }
 
             #socialDrawer {
@@ -2449,6 +2573,44 @@
             #socialNotice.error {
                 color: #e57373;
             }
+
+            #friendSearchForm {
+                display: flex;
+                gap: 6px;
+                padding: 0 16px;
+                flex-shrink: 0;
+            }
+
+            #friendSearchInput {
+                flex: 1;
+                min-width: 0;
+                padding: 7px 10px;
+                background: #2b2b2b;
+                border: 1px solid #3a3a3a;
+                border-radius: 6px;
+                color: #eee;
+                font-size: 0.82rem;
+                outline: none;
+                transition: border-color 0.15s;
+            }
+
+            #friendSearchInput:focus { border-color: #4caf50; }
+
+            #friendSearchBtn {
+                padding: 7px 12px;
+                background: #2e7d32;
+                border: none;
+                border-radius: 6px;
+                color: #fff;
+                font-size: 0.82rem;
+                font-weight: bold;
+                cursor: pointer;
+                transition: background 0.15s;
+                white-space: nowrap;
+            }
+
+            #friendSearchBtn:hover:not(:disabled) { background: #388e3c; }
+            #friendSearchBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
             .socialPanel {
                 display: none;
@@ -2928,8 +3090,8 @@
             <span>Welcome, <span class="player-name" id="playerBarName"></span>!</span>
             <div class="bar-right">
                 <button type="button" class="barButton" id="channelBrowserButton">Channel Browser</button>
-                <button type="button" class="barButton" id="friendsButton">Friends</button>
-                <button type="button" class="barButton" id="messagesButton">DMs</button>
+                <button type="button" class="barButton" id="friendsButton">Friends<span class="notifBadge" id="friendsBadge"></span></button>
+                <button type="button" class="barButton" id="messagesButton">DMs<span class="notifBadge" id="dmsBadge"></span></button>
                 <button id="avatarColorBtn" title="Customize avatar color"></button>
                 <div id="avatarPanel">
                     <p>Avatar Color</p>
@@ -2972,6 +3134,10 @@
             </div>
             <p id="socialNotice"></p>
             <section id="friendsPanel" class="socialPanel active">
+                <form id="friendSearchForm" autocomplete="off">
+                    <input type="text" id="friendSearchInput" placeholder="Search username to add..." maxlength="20" />
+                    <button type="submit" id="friendSearchBtn">Add</button>
+                </form>
                 <div>
                     <h3 class="socialSectionTitle">Pending</h3>
                     <div class="socialList" id="pendingFriendsList"></div>
@@ -3090,6 +3256,22 @@
                     <button type="submit">Create Account</button>
                 </form>
 
+            </div>
+        </div>
+
+        <div id="usernameOverlay">
+            <div id="usernameCard">
+                <button id="usernameCloseBtn" type="button" aria-label="Close">&times;</button>
+                <h2>Change Username</h2>
+                <p class="subtitle">Your current name: <strong id="currentUsernameDisplay" style="color:#4caf50;"></strong></p>
+                <form class="authForm" id="formChangeUsername" style="display:flex;">
+                    <label>
+                        New Username
+                        <input type="text" id="newUsernameInput" autocomplete="off" required maxlength="20" placeholder="2–20 characters" />
+                    </label>
+                    <p class="authError" id="usernameChangeError"></p>
+                    <button type="submit" id="usernameSubmitBtn">Save</button>
+                </form>
             </div>
         </div>
 
@@ -3274,7 +3456,7 @@
         </div>
 
         <footer id="siteFooter">
-            <span><strong>OpenRealm</strong> v0.2.5</span>
+            <span><strong>OpenRealm</strong> v0.2.7</span>
             <span>Created by <strong>YockMakesGames</strong></span>
         </footer>
 
@@ -3513,6 +3695,10 @@
                         <p id="profileRegistered"></p>
                         <p id="profileSession"></p>
                     </div>
+                </div>
+                <div id="profileAliases" style="display:none;">
+                    <p class="profileAliasLabel">Previously known as</p>
+                    <p id="profileAliasList"></p>
                 </div>
             </div>
         </div>
